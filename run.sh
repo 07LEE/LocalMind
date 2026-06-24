@@ -26,7 +26,21 @@ elif [ -d ".venv" ]; then
     source .venv/bin/activate
     echo -e "${GREEN}✔ Local .venv activated.${RESET}"
 else
-    echo -e "${YELLOW}⚠ Warning: No virtual environment detected. Proceeding with system python...${RESET}"
+    # Check common conda installation locations using $HOME
+    CONDA_ACTIVATE=""
+    for loc in "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/opt/miniconda3" "$HOME/opt/anaconda3" "/opt/miniconda3" "/opt/anaconda3"; do
+        if [ -f "$loc/bin/activate" ]; then
+            CONDA_ACTIVATE="$loc/bin/activate"
+            break
+        fi
+    done
+
+    if [ -n "$CONDA_ACTIVATE" ]; then
+        source "$CONDA_ACTIVATE" thought-search
+        echo -e "${GREEN}✔ Conda thought-search environment activated via $CONDA_ACTIVATE.${RESET}"
+    else
+        echo -e "${YELLOW}⚠ Warning: No virtual environment detected. Proceeding with system python...${RESET}"
+    fi
 fi
 
 # Check for Visualization Mode

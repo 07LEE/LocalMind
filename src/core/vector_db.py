@@ -203,8 +203,11 @@ class SimpleVectorDB:
             json.dump(data, f, ensure_ascii=False, indent=2)
             
         vectors = self.dense_engine.get_vectors()
-        if vectors is not None:
+        if vectors is not None and len(vectors) > 0:
             np.save(vector_path, vectors)
+        else:
+            if os.path.exists(vector_path):
+                os.remove(vector_path)
             
         print(f"LOGE: [VectorDB] Saved DB to {filepath}")
 
@@ -233,8 +236,10 @@ class SimpleVectorDB:
         
         # Load vectors
         vector_path = filepath.rsplit('.', 1)[0] + ".vectors.npy"
-        if os.path.exists(vector_path):
+        if len(self.documents) > 0 and os.path.exists(vector_path):
             self.dense_engine.set_vectors(np.load(vector_path))
+        else:
+            self.dense_engine.set_vectors(None)
         
         # Rebuild Sparse Index
         self.sparse_engine.rebuild(self.documents)
