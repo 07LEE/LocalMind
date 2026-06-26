@@ -13,6 +13,7 @@
 - **Hierarchical Support:** Recursively searches for markdown files in subdirectories.
 - **Category Extraction:** Automatically extracts folder names from the directory structure and stores them as `categories` metadata.
 - **3D Knowledge Graph:** Interactive 3D visualization of semantic relationships between documents using UMAP dimensionality reduction and Plotly.js.
+- **Local LLM RAG:** Integrates with a local Ollama service (defaulting to `qwen2.5-coder:14b`) to generate context-aware answers in Korean based on retrieved document context.
 
 ### Architecture & Storage
 
@@ -52,6 +53,7 @@ tags: ["tag1", "tag2"]
 - **Environment:** Conda
 - **Embedding:** `sentence-transformers`
 - **Vector Operations:** `numpy`
+- **Local LLM (RAG):** `Ollama` (using `qwen2.5-coder:14b`)
 
 ---
 
@@ -90,6 +92,9 @@ The most convenient way to use Thought-Search is via the `run.sh` script, which 
 
 # Search directly with a query
 ./run.sh "How to install Kubernetes?"
+
+# Search and get RAG answer using local Ollama model
+./run.sh "How to install Kubernetes?" --rag
 ```
 
 #### Manual Workflow
@@ -100,6 +105,9 @@ python src/cli/indexer.py
 
 # 2. Search for a specific query
 python src/cli/search.py "Your query here"
+
+# 3. Search and get RAG answer directly
+python src/cli/search.py "Your query here" --rag
 ```
 
 ### 3D Visualization
