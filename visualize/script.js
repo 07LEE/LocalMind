@@ -252,7 +252,7 @@ async function init() {
         globalEdges = data.edges;
         const categories = data.categories;
 
-        // 로컬 스토리지 결합 및 노드 초기 색상 보정
+        // Bind local storage and calibrate initial node colors
         const savedColorsRaw = localStorage.getItem('thought_search_custom_colors');
         const customColors = savedColorsRaw ? JSON.parse(savedColorsRaw) : {};
         
@@ -294,7 +294,7 @@ async function init() {
         legendHeaderWrapper.appendChild(resetColorsBtn);
         legendContainer.appendChild(legendHeaderWrapper);
 
-        // 1. 대분류별 소분류 그룹 정리
+        // 1. Organize subcategory groups by parent category
         const parentToSubs = {};
         globalNodes.forEach(n => {
             const cats = n.metadata.categories || ["Uncategorized"];
@@ -306,7 +306,7 @@ async function init() {
             parentToSubs[parent].add(sub);
         });
 
-        // 2. 아코디언 범례 렌더링
+        // 2. Render accordion legend
         for (const [cat, color] of Object.entries(categories)) {
             const group = document.createElement('div');
             group.className = 'legend-group';
@@ -319,7 +319,7 @@ async function init() {
             colorBox.style.background = color;
             colorBox.title = '대분류 색상 변경';
             
-            // 색상 피커 기능 연동 및 이벤트 전파 차단
+            // Integrate color picker and stop event propagation
             colorBox.addEventListener('click', function(e) {
                 e.stopPropagation();
                 
@@ -341,7 +341,7 @@ async function init() {
                         'marker.color': [globalNodes.map(n => n.color)]
                     }, [1]);
 
-                    // 하위 소분류 미니 색상 칩들도 즉시 리페인팅
+                    // Repaint subcategory color indicator chips immediately
                     const subList = group.querySelector('.legend-sub-list');
                     if (subList) {
                         const subItems = subList.querySelectorAll('.legend-sub-item');
@@ -358,7 +358,7 @@ async function init() {
                 picker.click();
             });
 
-            // 소분류 그라데이션 색상 동적 획득 헬퍼
+            // Helper to dynamically retrieve subcategory gradient colors
             const getSubColor = (parent, sub) => {
                 const foundNode = globalNodes.find(n => {
                     const cs = n.metadata.categories || ["Uncategorized"];
@@ -379,7 +379,7 @@ async function init() {
             header.appendChild(label);
             header.appendChild(arrow);
 
-            // 하위 소분류 목록 리스트
+            // List of child subcategories
             const subList = document.createElement('div');
             subList.className = 'legend-sub-list';
 
@@ -398,7 +398,7 @@ async function init() {
                 subItem.appendChild(subColorBox);
                 subItem.appendChild(subLabel);
 
-                // 소분류 지식 노드 실시간 하이라이팅 필터 장착
+                // Filter to highlight subcategory nodes in real-time
                 subItem.addEventListener('click', function(e) {
                     e.stopPropagation();
                     
@@ -406,12 +406,12 @@ async function init() {
                     const allSubItems = legendContainer.querySelectorAll('.legend-sub-item');
                     
                     if (activeSubHighlight === subKey) {
-                        // 이미 선택된 항목 재클릭 시 필터링 전면 해제
+                        // Fully clear filter when clicking the already active item
                         activeSubHighlight = null;
                         subItem.classList.remove('active');
                         applyGraphVisualState();
                     } else {
-                        // 새로운 소분류 공간 하이라이트 가동
+                        // Activate highlighting for the new subcategory space
                         activeSubHighlight = subKey;
                         allSubItems.forEach(item => item.classList.remove('active'));
                         subItem.classList.add('active');
@@ -422,7 +422,7 @@ async function init() {
                 subList.appendChild(subItem);
             });
 
-            // 헤더 영역 클릭 시 아코디언 토글 적용
+            // Toggle accordion when clicking header region
             header.addEventListener('click', function() {
                 group.classList.toggle('active');
             });
@@ -876,7 +876,7 @@ async function resetView() {
     if (isUpdating) return;
     isUpdating = true;
     try {
-        // 소분류 공간 하이라이트 필터링 정보 전면 롤백
+        // Rollback all subcategory highlighting filter settings
         activeSubHighlight = null;
         const allSubItems = document.querySelectorAll('.legend-sub-item');
         allSubItems.forEach(item => item.classList.remove('active'));

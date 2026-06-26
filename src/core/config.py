@@ -35,3 +35,7 @@ EXCLUDED_FILENAMES = ["README.md", "TEMPLATE.md"]
 
 # File extensions to index
 SUPPORTED_EXTENSIONS = [".md"]
+
+# Ollama LLM Configuration for RAG
+OLLAMA_HOST = os.getenv("THOUGHT_SEARCH_OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("THOUGHT_SEARCH_OLLAMA_MODEL", "qwen2.5-coder:14b")

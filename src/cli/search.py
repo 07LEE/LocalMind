@@ -2,6 +2,7 @@ import argparse
 import sys
 import os
 from core.vector_db import SimpleVectorDB
+from core.llm import OllamaClient
 
 
 def main():
@@ -32,6 +33,9 @@ def main():
     parser.add_argument(
         "--rerank_k", type=int, default=10, help="Number of candidates for re-ranking."
     )
+    parser.add_argument(
+        "--rag", action="store_true", help="Enable RAG using local Ollama model."
+    )
 
     args = parser.parse_args()
     rerank = not args.no_rerank
@@ -46,7 +50,7 @@ def main():
     db.load(args.db)
 
     if args.query:
-        search_query(db, args.query, args.top_k, args.threshold, rerank, args.rerank_k)
+        search_query(db, args.query, args.top_k, args.threshold, rerank, args.rerank_k, rag=args.rag)
     else:
         print("\n=== Entering Interactive Search Mode (Type 'q' or 'quit' to exit) ===")
         print(f"💡 Tip: Re-ranking is {'ENABLED' if rerank else 'DISABLED'}. Enter a result number to open!")
@@ -79,12 +83,12 @@ def main():
                     continue
 
             # Execute search
-            last_results = search_query(db, query, args.top_k, args.threshold, rerank, args.rerank_k)
+            last_results = search_query(db, query, args.top_k, args.threshold, rerank, args.rerank_k, rag=args.rag)
 
 
 import textwrap
 
-def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10):
+def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10, rag=False):
     """Executes a search query and prints the formatted, clean results.
 
     Args:
@@ -185,6 +189,17 @@ def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10):
         print(f"{DIM}──────────────────────────────────────────────────────────────{RESET}")
 
     print(f"{DIM}Total {len(results)} results displayed. (Type #1 to open first result){RESET}\n")
+
+    if rag:
+        client = OllamaClient()
+        prompt = client.build_rag_prompt(query, results)
+        print(f"{GREEN}{BOLD}🤖 Local LLM Response ({client.model}):{RESET}")
+        print(f"{DIM}──────────────────────────────────────────────────────────────{RESET}")
+        for token in client.generate_stream(prompt):
+            sys.stdout.write(token)
+            sys.stdout.flush()
+        print(f"\n{DIM}──────────────────────────────────────────────────────────────{RESET}\n")
+
     return results
 
 

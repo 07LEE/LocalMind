@@ -95,7 +95,30 @@ class SimpleVectorDB:
 
         # Update Sparse Engine index
         self.sparse_engine.rebuild(self.documents)
+
+        # Update file hashes cache
+        self.file_hashes.pop(filename, None)
         return removed_count
+
+    def _preprocess_query(self, query):
+        """Preprocesses the user query by replacing Korean phonetic transliterations with standard English terms.
+
+        Args:
+            query (str): The raw search query.
+
+        Returns:
+            str: The normalized search query.
+        """
+        if not query:
+            return query
+        synonyms = {
+            "아이작심": "Isaac Sim",
+            "아이작 심": "Isaac Sim"
+        }
+        normalized = query
+        for k, v in synonyms.items():
+            normalized = normalized.replace(k, v)
+        return normalized
 
     def search(self, query, top_k=3):
         """Searches the database for the most similar documents to the given query using vectorized operations.
@@ -107,6 +130,7 @@ class SimpleVectorDB:
         Returns:
             list[dict]: A list of dictionaries containing the score, text, and metadata for each result.
         """
+        query = self._preprocess_query(query)
         return self.dense_engine.search(query, self.documents, self.metadata, top_k=top_k)
 
     def search_bm25(self, query, top_k=3):
@@ -119,6 +143,7 @@ class SimpleVectorDB:
         Returns:
             list[dict]: A list of results with scores, text, and metadata.
         """
+        query = self._preprocess_query(query)
         return self.sparse_engine.search(query, self.documents, self.metadata, top_k=top_k)
 
     def search_hybrid(self, query, top_k=3, k_factor=20):
@@ -203,8 +228,11 @@ class SimpleVectorDB:
             json.dump(data, f, ensure_ascii=False, indent=2)
             
         vectors = self.dense_engine.get_vectors()
-        if vectors is not None:
+        if vectors is not None and len(vectors) > 0:
             np.save(vector_path, vectors)
+        else:
+            if os.path.exists(vector_path):
+                os.remove(vector_path)
             
         print(f"LOGE: [VectorDB] Saved DB to {filepath}")
 
@@ -233,8 +261,10 @@ class SimpleVectorDB:
         
         # Load vectors
         vector_path = filepath.rsplit('.', 1)[0] + ".vectors.npy"
-        if os.path.exists(vector_path):
+        if len(self.documents) > 0 and os.path.exists(vector_path):
             self.dense_engine.set_vectors(np.load(vector_path))
+        else:
+            self.dense_engine.set_vectors(None)
         
         # Rebuild Sparse Index
         self.sparse_engine.rebuild(self.documents)
