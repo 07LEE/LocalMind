@@ -237,7 +237,7 @@ def index_markdown_files(posts_dir, db_path, model_name=None):
         # But we've updated metadata to store rel_path as well.
         removed = db.remove_by_filename(identifier)
         if identifier in deleted:
-            del db.file_hashes[identifier]
+            db.file_hashes.pop(identifier, None)
             print(f"LOGE: [Indexer] Removed: {identifier} ({removed} chunks)")
 
     # --- Index New & Changed Files (Parallel Version) ---
