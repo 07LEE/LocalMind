@@ -11,73 +11,96 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;700&display=swap" rel="stylesheet">
     
     <!-- Custom Styles -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <header>
-        <h1>Thought-Search Knowledge Graph</h1>
-        <div class="header-right">
-            <div class="stats" id="doc-count"></div>
-            <button class="sync-btn" id="sync-btn">
-                Sync DB
-            </button>
+<body class="dark-mode">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <span class="logo-text">Thought-Search</span>
+            <div class="header-actions">
+                <button class="theme-toggle-btn" id="theme-toggle" aria-label="화면 테마 전환">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+                <button class="sync-btn" id="sync-btn">Sync</button>
+            </div>
         </div>
-    </header>
 
-    <main>
-        <div id="plot"></div>
-        <div class="legend" id="legend"></div>
-        <div class="search-container">
-            <input type="text" class="search-input" id="search-input" placeholder="지식 조각 검색 (제목, 태그, 내용)...">
-            <div class="search-results" id="search-results"></div>
-        </div>
-        <div class="info-panel" id="info-panel">
-            <div class="info-header">
-                <div class="info-header-left">
-                    <div class="info-title" id="info-title">문서 제목</div>
-                </div>
-                <div class="close-panel-btn" id="close-panel-btn">&times;</div>
-            </div>
-            <div class="info-body">
-                <div class="info-path" id="info-path">path/to/document.md</div>
-                <div class="info-tags" id="info-tags"></div>
-                <div class="info-content" id="info-content">
-                    문서 내용을 로드 중입니다...
-                </div>
-                <div class="related-section">
-                    <div class="related-header">연관 지식 (Semantic Connections)</div>
-                    <div class="related-list" id="related-list"></div>
+        <nav class="navigation-tree">
+            <div class="nav-title">Documents <span id="doc-count" style="text-transform: none; font-size: 0.7rem; color: var(--text-secondary); margin-left: 4px;"></span></div>
+            <div class="legend" id="legend"></div>
+        </nav>
+    </aside>
+
+    <!-- Right Main Content Area -->
+    <main class="main-content">
+        <!-- 1. Welcome & Visualization View (Initial State) -->
+        <div id="welcome-view" class="content-view">
+            <!-- Top Search Engine Area -->
+            <div class="main-search-section">
+                <div class="main-search-box">
+                    <input type="text" class="main-search-input" id="main-search-input" placeholder="Search...">
+                    <div class="main-search-results" id="main-search-results"></div>
                 </div>
             </div>
-        </div>
-        <div class="controls">
-            <div class="control-group">
-                <label>연관 지식 밀도 (Threshold: <span id="threshold-val">0.80</span>)</label>
-                <input type="range" id="threshold-slider" min="0.50" max="0.95" step="0.01" value="0.80">
-            </div>
-            <div class="control-group timeline-group">
-                <label>지식 탐색 기간 (<span id="timeline-start-val">YYYY-MM-DD</span> ~ <span id="timeline-end-val">YYYY-MM-DD</span>)</label>
-                <div class="timeline-slider-container">
-                    <input type="range" id="timeline-start-slider" min="0" max="100" value="0" class="timeline-slider">
-                    <input type="range" id="timeline-end-slider" min="0" max="100" value="100" class="timeline-slider">
+
+            <!-- Stretched 3D Vector Plot in Framed Box -->
+            <section class="viz-section">
+                <div class="viz-container">
+                    <div id="plot"></div>
+                    
+                    <div class="viz-overlay-controls">
+                        <div class="control-group">
+                            <label>연관 밀도 (Threshold: <span id="threshold-val">0.80</span>)</label>
+                            <input type="range" id="threshold-slider" min="0.50" max="0.95" step="0.01" value="0.80">
+                        </div>
+                        <div class="orbit-control">
+                            <label class="switch">
+                                <input type="checkbox" id="orbit-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <span class="orbit-label">Auto-Orbit</span>
+                        </div>
+                    </div>
+                    
+                    <div class="hint">
+                        좌클릭 드래그: 회전 | 우클릭 드래그: 이동 | 휠: 확대/축소 | 노드 클릭: 문서 열기
+                    </div>
                 </div>
-            </div>
+            </section>
         </div>
-        <div class="orbit-control">
-            <label class="switch">
-                <input type="checkbox" id="orbit-toggle" checked>
-                <span class="slider round"></span>
-            </label>
-            <span class="orbit-label">Auto-Orbit</span>
-        </div>
-        <div class="hint">
-            • <b>좌클릭 드래그</b>: 회전&nbsp;&nbsp;&nbsp;
-            • <b>우클릭 드래그</b>: 이동&nbsp;&nbsp;&nbsp;
-            • <b>휠</b>: 확대/축소&nbsp;&nbsp;&nbsp;
-            • <b>점 클릭</b>: 관계망 탐색
+
+        <!-- 2. Document Content View (Active State) -->
+        <div id="doc-view" class="content-view" style="display: none;">
+            <article class="info-panel">
+                <header class="info-header">
+                    <div class="info-header-left">
+                        <h1 class="info-title" id="info-title">문서 제목</h1>
+                        <div class="info-path" id="info-path">path/to/document.md</div>
+                        <div class="info-tags" id="info-tags"></div>
+                    </div>
+                    <div class="info-header-right">
+                        <button class="close-panel-btn" id="close-panel-btn" aria-label="문서 닫기">×</button>
+                        <div class="info-dates" id="info-dates">
+                            <div class="info-date-row"><span class="date-label">Created:</span><span id="info-created">-</span></div>
+                            <div class="info-date-row"><span class="date-label">Modified:</span><span id="info-modified">-</span></div>
+                        </div>
+                    </div>
+                </header>
+                <div class="info-body">
+                    <div class="info-content" id="info-content">
+                        문서 내용을 로드 중입니다...
+                    </div>
+                    <div class="related-section">
+                        <div class="related-header">연관 지식 (Semantic Connections)</div>
+                        <div class="related-list" id="related-list"></div>
+                    </div>
+                </div>
+            </article>
         </div>
     </main>
 

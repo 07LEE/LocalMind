@@ -7,10 +7,6 @@ let lastHighlightedIndex = null;
 let isAutoOrbit = true;
 let orbitAngle = 0;
 let activeSubHighlight = null;
-let timelineStart = null;
-let timelineEnd = null;
-let minTimelineTime = null;
-let maxTimelineTime = null;
 let activeSearchIndices = null;
 
 function getNodeTime(node) {
@@ -33,114 +29,154 @@ function formatDate(timestamp) {
     return `${yyyy}-${mm}-${dd}`;
 }
 
-function applyGraphVisualState() {
-    const startVal = timelineStart !== null ? timelineStart : minTimelineTime;
-    const endVal = timelineEnd !== null ? timelineEnd : maxTimelineTime;
-    
-    let baseOpacities = [];
-    let baseSizes = [];
-    
-    if (lastHighlightedIndex !== null) {
-        const connectedIndices = new Set();
-        globalEdges.forEach(edge => {
-            const [sIdx, tIdx, score] = edge;
-            if (score >= currentThreshold && (sIdx === lastHighlightedIndex || tIdx === lastHighlightedIndex)) {
-                const neighborIdx = (sIdx === lastHighlightedIndex ? tIdx : sIdx);
-                connectedIndices.add(neighborIdx);
+// Update Active Class inside Navigation Sidebar
+function updateActiveDocItem(index) {
+    const items = document.querySelectorAll('.legend-doc-item');
+    items.forEach(item => {
+        if (parseInt(item.dataset.index) === index) {
+            item.classList.add('active');
+            // Expand parent nodes if they are folded
+            let parentGroup = item.closest('.legend-group');
+            if (parentGroup && !parentGroup.classList.contains('active')) {
+                parentGroup.classList.add('active');
             }
-        });
-        
-        baseOpacities = globalNodes.map((n, i) => (i === lastHighlightedIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
-        baseSizes = globalNodes.map((n, i) => (i === lastHighlightedIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
-    } else if (activeSubHighlight !== null) {
-        const [cat, sub] = activeSubHighlight.split(' > ');
-        baseOpacities = globalNodes.map(n => {
-            const cs = n.metadata.categories || ["Uncategorized"];
-            return (cs[0] === cat && (cs[1] || "General") === sub) ? 1.0 : 0.08;
-        });
-        baseSizes = globalNodes.map(n => {
-            const cs = n.metadata.categories || ["Uncategorized"];
-            const isMatch = cs[0] === cat && (cs[1] || "General") === sub;
-            return isMatch ? n.size : 1.5;
-        });
-    } else if (activeSearchIndices !== null) {
-        baseOpacities = globalNodes.map((n, i) => activeSearchIndices.has(i) ? 1.0 : 0.05);
-        baseSizes = globalNodes.map((n, i) => activeSearchIndices.has(i) ? n.size * 1.5 : 2);
-    } else {
-        baseOpacities = globalNodes.map(() => 0.9);
-        baseSizes = globalNodes.map(n => n.size);
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+let isRendering = false;
+
+async function applyGraphVisualState() {
+    const welcomeView = document.getElementById('welcome-view');
+    if (!welcomeView || welcomeView.style.display === 'none') {
+        return;
     }
-    
-    const finalOpacities = globalNodes.map((n, i) => {
-        const time = getNodeTime(n);
-        if (time >= startVal && time <= endVal) {
-            return baseOpacities[i];
+    if (isRendering) return;
+    isRendering = true;
+    try {
+        let baseOpacities = [];
+        let baseSizes = [];
+        
+        if (lastHighlightedIndex !== null) {
+            const connectedIndices = new Set();
+            globalEdges.forEach(edge => {
+                const [sIdx, tIdx, score] = edge;
+                if (score >= currentThreshold && (sIdx === lastHighlightedIndex || tIdx === lastHighlightedIndex)) {
+                    const neighborIdx = (sIdx === lastHighlightedIndex ? tIdx : sIdx);
+                    connectedIndices.add(neighborIdx);
+                }
+            });
+            
+            baseOpacities = globalNodes.map((n, i) => (i === lastHighlightedIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
+            baseSizes = globalNodes.map((n, i) => (i === lastHighlightedIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
+        } else if (activeSubHighlight !== null) {
+            const [cat, sub] = activeSubHighlight.split(' :: ');
+            baseOpacities = globalNodes.map(n => {
+                return (n.category === cat && n.subcategory === sub) ? 1.0 : 0.08;
+            });
+            baseSizes = globalNodes.map(n => {
+                const isMatch = n.category === cat && n.subcategory === sub;
+                return isMatch ? n.size : 1.5;
+            });
+        } else if (activeSearchIndices !== null) {
+            baseOpacities = globalNodes.map((n, i) => activeSearchIndices.has(i) ? 1.0 : 0.05);
+            baseSizes = globalNodes.map((n, i) => activeSearchIndices.has(i) ? n.size * 1.5 : 2);
         } else {
-            return 0.005;
+            baseOpacities = globalNodes.map(() => 0.9);
+            baseSizes = globalNodes.map(n => n.size);
         }
-    });
-    
-    const finalSizes = globalNodes.map((n, i) => {
-        const time = getNodeTime(n);
-        if (time >= startVal && time <= endVal) {
-            return baseSizes[i];
-        } else {
-            return 0.5;
-        }
-    });
-    
-    // Compute edges based on threshold and timeline
-    const edgeX = [], edgeY = [], edgeZ = [];
-    globalEdges.forEach(edge => {
-        const [sourceIdx, targetIdx, score] = edge;
-        if (score >= currentThreshold) {
-            const s = globalNodes[sourceIdx], t = globalNodes[targetIdx];
-            const sTime = getNodeTime(s);
-            const tTime = getNodeTime(t);
-            if (sTime >= startVal && sTime <= endVal && tTime >= startVal && tTime <= endVal) {
-                edgeX.push(s.x, t.x, null); edgeY.push(s.y, t.y, null); edgeZ.push(s.z, t.z, null);
-            }
-        }
-    });
-    
-    let finalEdgeX = edgeX;
-    let finalEdgeY = edgeY;
-    let finalEdgeZ = edgeZ;
-    let edgeColor = 'rgba(56, 189, 248, 0.15)';
-    let edgeWidth = 1;
-    
-    if (lastHighlightedIndex !== null) {
-        const hX = [], hY = [], hZ = [];
+        
+        const edgeX = [], edgeY = [], edgeZ = [];
         globalEdges.forEach(edge => {
-            const [sIdx, tIdx, score] = edge;
-            if (score >= currentThreshold && (sIdx === lastHighlightedIndex || tIdx === lastHighlightedIndex)) {
-                const s = globalNodes[sIdx], t = globalNodes[tIdx];
-                const sTime = getNodeTime(s);
-                const tTime = getNodeTime(t);
-                if (sTime >= startVal && sTime <= endVal && tTime >= startVal && tTime <= endVal) {
-                    hX.push(s.x, t.x, null); hY.push(s.y, t.y, null); hZ.push(s.z, t.z, null);
+            const [sourceIdx, targetIdx, score] = edge;
+            if (score >= currentThreshold) {
+                const s = globalNodes[sourceIdx], t = globalNodes[targetIdx];
+                if (s && t) {
+                    edgeX.push(s.x, t.x, null); edgeY.push(s.y, t.y, null); edgeZ.push(s.z, t.z, null);
                 }
             }
         });
-        finalEdgeX = hX.length ? hX : [null];
-        finalEdgeY = hY.length ? hY : [null];
-        finalEdgeZ = hZ.length ? hZ : [null];
-        edgeColor = 'rgba(56, 189, 248, 0.8)';
-        edgeWidth = 3;
+        
+        let finalEdgeX = edgeX;
+        let finalEdgeY = edgeY;
+        let finalEdgeZ = edgeZ;
+        
+        const theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+        let edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
+        let edgeWidth = theme === 'light' ? 1.5 : 1;
+        
+        if (lastHighlightedIndex !== null) {
+            const hX = [], hY = [], hZ = [];
+            globalEdges.forEach(edge => {
+                const [sIdx, tIdx, score] = edge;
+                if (score >= currentThreshold && (sIdx === lastHighlightedIndex || tIdx === lastHighlightedIndex)) {
+                    const s = globalNodes[sIdx], t = globalNodes[tIdx];
+                    if (s && t) {
+                        hX.push(s.x, t.x, null); hY.push(s.y, t.y, null); hZ.push(s.z, t.z, null);
+                    }
+                }
+            });
+            finalEdgeX = hX.length ? hX : [null];
+            finalEdgeY = hY.length ? hY : [null];
+            finalEdgeZ = hZ.length ? hZ : [null];
+            edgeColor = 'rgba(58, 166, 255, 0.8)';
+            edgeWidth = 3;
+        } else if (activeSubHighlight !== null) {
+            const [cat, sub] = activeSubHighlight.split(' :: ');
+            const subCategoryNodeIndices = new Set();
+            globalNodes.forEach((n, i) => {
+                if (n.category === cat && n.subcategory === sub) {
+                    subCategoryNodeIndices.add(i);
+                }
+            });
+            const hX = [], hY = [], hZ = [];
+            globalEdges.forEach(edge => {
+                const [sIdx, tIdx, score] = edge;
+                if (score >= currentThreshold && subCategoryNodeIndices.has(sIdx) && subCategoryNodeIndices.has(tIdx)) {
+                    const s = globalNodes[sIdx], t = globalNodes[tIdx];
+                    if (s && t) {
+                        hX.push(s.x, t.x, null); hY.push(s.y, t.y, null); hZ.push(s.z, t.z, null);
+                    }
+                }
+            });
+            finalEdgeX = hX.length ? hX : [null];
+            finalEdgeY = hY.length ? hY : [null];
+            finalEdgeZ = hZ.length ? hZ : [null];
+        } else if (activeSearchIndices !== null) {
+            const hX = [], hY = [], hZ = [];
+            globalEdges.forEach(edge => {
+                const [sIdx, tIdx, score] = edge;
+                if (score >= currentThreshold && activeSearchIndices.has(sIdx) && activeSearchIndices.has(tIdx)) {
+                    const s = globalNodes[sIdx], t = globalNodes[tIdx];
+                    if (s && t) {
+                        hX.push(s.x, t.x, null); hY.push(s.y, t.y, null); hZ.push(s.z, t.z, null);
+                    }
+                }
+            });
+            finalEdgeX = hX.length ? hX : [null];
+            finalEdgeY = hY.length ? hY : [null];
+            finalEdgeZ = hZ.length ? hZ : [null];
+        }
+        
+        await Plotly.restyle('plot', {
+            'marker.opacity': [baseOpacities],
+            'marker.size': [baseSizes]
+        }, [1]);
+        
+        await Plotly.restyle('plot', {
+            'x': [finalEdgeX],
+            'y': [finalEdgeY],
+            'z': [finalEdgeZ],
+            'line.color': edgeColor,
+            'line.width': edgeWidth
+        }, [0]);
+    } catch (err) {
+        console.error("Visual state update error:", err);
+    } finally {
+        isRendering = false;
     }
-    
-    Plotly.restyle('plot', {
-        'marker.opacity': [finalOpacities],
-        'marker.size': [finalSizes]
-    }, [1]);
-    
-    Plotly.restyle('plot', {
-        'x': [finalEdgeX],
-        'y': [finalEdgeY],
-        'z': [finalEdgeZ],
-        'line.color': edgeColor,
-        'line.width': edgeWidth
-    }, [0]);
 }
 
 // --- Color Space Utility Helpers ---
@@ -195,41 +231,48 @@ function hlsToHex(h, l, s) {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-function updateNodeColorsForCategory(targetCat, newHex) {
-    const targetNodes = globalNodes.filter(n => n.category === targetCat);
-    const subs = Array.from(new Set(targetNodes.map(n => {
-        const cats = n.metadata.categories || ["Uncategorized"];
-        return cats[1] || "General";
-    }))).sort();
+
+
+// --- Theme Management ---
+function updatePlotlyTheme(theme) {
+    if (!document.getElementById('plot')) return;
     
-    const { h, l, s } = hexToHls(newHex);
-    const numSubs = subs.length;
+    const edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
+    const nodeLineColor = theme === 'light' ? 'rgba(36, 41, 47, 0.4)' : 'rgba(201, 209, 217, 0.1)';
     
-    const subToColor = {};
-    subs.forEach((sub, subIdx) => {
-        if (numSubs <= 1) {
-            subToColor[sub] = newHex;
-        } else {
-            const lightnessOffset = -0.22 + (subIdx * 0.44 / (numSubs - 1));
-            const saturationOffset = -0.15 + (subIdx * 0.25 / (numSubs - 1));
-            const modulatedL = Math.max(0.30, Math.min(0.90, l + lightnessOffset));
-            const modulatedS = Math.max(0.35, Math.min(1.0, s + saturationOffset));
-            subToColor[sub] = hlsToHex(h, modulatedL, modulatedS);
-        }
-    });
-    
-    globalNodes.forEach(node => {
-        if (node.category === targetCat) {
-            const cats = node.metadata.categories || ["Uncategorized"];
-            const sub = cats[1] || "General";
-            node.color = subToColor[sub] || newHex;
-        }
-    });
+    Plotly.restyle('plot', {
+        'line.color': lastHighlightedIndex !== null ? 'rgba(58, 166, 255, 0.8)' : edgeColor,
+        'marker.line.color': nodeLineColor
+    }, [0, 1]).catch(() => {});
 }
 
 async function init() {
     try {
-        // --- Markdown & Table Setup ---
+        // Theme initialization
+        const themeToggle = document.getElementById('theme-toggle');
+        let currentTheme = localStorage.getItem('theme') || 'dark';
+
+        if (currentTheme === 'light') {
+            document.body.classList.remove('dark-mode');
+            document.body.classList.add('light-mode');
+        } else {
+            document.body.classList.remove('light-mode');
+            document.body.classList.add('dark-mode');
+        }
+
+        themeToggle.addEventListener('click', () => {
+            if (document.body.classList.contains('dark-mode')) {
+                document.body.classList.replace('dark-mode', 'light-mode');
+                localStorage.setItem('theme', 'light');
+                updatePlotlyTheme('light');
+            } else {
+                document.body.classList.replace('light-mode', 'dark-mode');
+                localStorage.setItem('theme', 'dark');
+                updatePlotlyTheme('dark');
+            }
+        });
+
+        // --- Markdown Setup ---
         marked.use({
             hooks: {
                 postprocess(html) {
@@ -245,194 +288,228 @@ async function init() {
             headerIds: false, 
             mangle: false 
         });
-
-        const response = await fetch('/data/viz-data.json');
+            const response = await fetch('/data/viz-data.json');
         const data = await response.json();
         globalNodes = data.nodes;
         globalEdges = data.edges;
-        const categories = data.categories;
 
-        // Bind local storage and calibrate initial node colors
-        const savedColorsRaw = localStorage.getItem('thought_search_custom_colors');
-        const customColors = savedColorsRaw ? JSON.parse(savedColorsRaw) : {};
-        
-        for (const [cat, customHex] of Object.entries(customColors)) {
-            if (categories[cat]) {
-                categories[cat] = customHex;
-                updateNodeColorsForCategory(cat, customHex);
+        // Setup category, subcategory, and rootSubcategory for each node based on physical folder structure
+        globalNodes.forEach(node => {
+            const rawPath = node.metadata.rel_path;
+            const parts = rawPath.split('/').filter(p => p);
+            let category = 'General';
+            let subcategory = 'General';
+            let rootSub = 'General';
+            
+            if (parts.length > 1) {
+                category = parts[0];
+                if (parts.length > 2) {
+                    subcategory = parts.slice(1, -1).join(' > ');
+                    rootSub = parts[1]; // First directory under Notes/Journey
+                } else {
+                    subcategory = parts[0];
+                    rootSub = parts[0];
+                }
             }
-        }
+            node.category = category;
+            node.subcategory = subcategory;
+            node.rootSubcategory = rootSub;
+        });
+
+        // Generate distinct HSL hues for first-level subdirectories (rootSubcategory)
+        const rootSubsSet = new Set();
+        globalNodes.forEach(node => {
+            rootSubsSet.add(`${node.category}::${node.rootSubcategory}`);
+        });
+        const sortedRootSubs = Array.from(rootSubsSet).sort();
+        const numRootSubs = sortedRootSubs.length;
+
+        const rootSubToColor = {};
+        sortedRootSubs.forEach((key, idx) => {
+            // Distribute Hue evenly across 360 degrees
+            const h = idx / numRootSubs;
+            // Highlighted HSL representing distinct root subcategories - tone down to soft pastel HSL
+            rootSubToColor[key] = { h, l: 0.60, s: 0.40 };
+        });
+
+        // Generate modulated colors for nested subcategories
+        const rootToSubs = {};
+        globalNodes.forEach(node => {
+            const rKey = `${node.category}::${node.rootSubcategory}`;
+            if (!rootToSubs[rKey]) {
+                rootToSubs[rKey] = new Set();
+            }
+            rootToSubs[rKey].add(node.subcategory);
+        });
+
+        const subToColorMap = {};
+        Object.keys(rootToSubs).forEach(rKey => {
+            const baseColor = rootSubToColor[rKey];
+            const subsInRoot = Array.from(rootToSubs[rKey]).sort();
+            const numSubs = subsInRoot.length;
+
+            subsInRoot.forEach((sub, subIdx) => {
+                if (numSubs <= 1) {
+                    subToColorMap[`${rKey}::${sub}`] = hlsToHex(baseColor.h, baseColor.l, baseColor.s);
+                } else {
+                    // Keep hue identical, modulate lightness and saturation inside a soft pastel range
+                    const lightnessOffset = -0.12 + (subIdx * 0.24 / (numSubs - 1));
+                    const saturationOffset = -0.08 + (subIdx * 0.16 / (numSubs - 1));
+                    const modulatedL = Math.max(0.45, Math.min(0.75, baseColor.l + lightnessOffset));
+                    const modulatedS = Math.max(0.25, Math.min(0.60, baseColor.s + saturationOffset));
+                    subToColorMap[`${rKey}::${sub}`] = hlsToHex(baseColor.h, modulatedL, modulatedS);
+                }
+            });
+        });
+
+        // Set final calculated color for each node
+        globalNodes.forEach(node => {
+            const rKey = `${node.category}::${node.rootSubcategory}`;
+            const subKey = `${rKey}::${node.subcategory}`;
+            node.color = subToColorMap[subKey] || "#cccccc";
+        });
 
         const legendContainer = document.getElementById('legend');
         legendContainer.innerHTML = '';
-        
-        const legendHeaderWrapper = document.createElement('div');
-        legendHeaderWrapper.style.display = 'flex';
-        legendHeaderWrapper.style.justifyContent = 'space-between';
-        legendHeaderWrapper.style.alignItems = 'center';
-        legendHeaderWrapper.style.marginBottom = '8px';
-        
-        const legendTitleEl = document.createElement('span');
-        legendTitleEl.style.fontSize = '0.7rem';
-        legendTitleEl.style.color = '#64748b';
-        legendTitleEl.style.textTransform = 'uppercase';
-        legendTitleEl.style.letterSpacing = '0.05em';
-        legendTitleEl.textContent = 'Categories';
-        
-        const resetColorsBtn = document.createElement('span');
-        resetColorsBtn.className = 'legend-reset-btn';
-        resetColorsBtn.textContent = 'Reset';
-        resetColorsBtn.title = '색상 테마 초기화';
-        
-        resetColorsBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            localStorage.removeItem('thought_search_custom_colors');
-            location.reload();
-        });
-        
-        legendHeaderWrapper.appendChild(legendTitleEl);
-        legendHeaderWrapper.appendChild(resetColorsBtn);
-        legendContainer.appendChild(legendHeaderWrapper);
 
-        // 1. Organize subcategory groups by parent category
-        const parentToSubs = {};
-        globalNodes.forEach(n => {
-            const cats = n.metadata.categories || ["Uncategorized"];
-            const parent = cats[0];
-            const sub = cats[1] || "General";
-            if (!parentToSubs[parent]) {
-                parentToSubs[parent] = new Set();
-            }
-            parentToSubs[parent].add(sub);
-        });
+        // Organize documents under unified 2-level structure: Category (Major) -> Subcategory (Accordion)
+        const db = {};
+        const catToColor = {};
 
-        // 2. Render accordion legend
-        for (const [cat, color] of Object.entries(categories)) {
-            const group = document.createElement('div');
-            group.className = 'legend-group';
-
-            const header = document.createElement('div');
-            header.className = 'legend-header';
-
-            const colorBox = document.createElement('div');
-            colorBox.className = 'legend-color';
-            colorBox.style.background = color;
-            colorBox.title = '대분류 색상 변경';
+        globalNodes.forEach((node, nodeIdx) => {
+            const category = node.category;
+            const subcategory = node.subcategory;
             
-            // Integrate color picker and stop event propagation
-            colorBox.addEventListener('click', function(e) {
-                e.stopPropagation();
-                
-                const picker = document.createElement('input');
-                picker.type = 'color';
-                picker.value = categories[cat];
-                
-                picker.addEventListener('input', function() {
-                    const newColor = picker.value;
-                    categories[cat] = newColor;
-                    colorBox.style.background = newColor;
-                    
-                    customColors[cat] = newColor;
-                    localStorage.setItem('thought_search_custom_colors', JSON.stringify(customColors));
-                    
-                    updateNodeColorsForCategory(cat, newColor);
-                    
-                    Plotly.restyle('plot', {
-                        'marker.color': [globalNodes.map(n => n.color)]
-                    }, [1]);
+            if (!db[category]) {
+                db[category] = {};
+            }
+            if (!db[category][subcategory]) {
+                db[category][subcategory] = [];
+            }
+            db[category][subcategory].push({ node, index: nodeIdx });
+            
+            if (!catToColor[category]) {
+                catToColor[category] = node.color || "#cccccc";
+            }
+        });
 
-                    // Repaint subcategory color indicator chips immediately
-                    const subList = group.querySelector('.legend-sub-list');
-                    if (subList) {
-                        const subItems = subList.querySelectorAll('.legend-sub-item');
-                        subItems.forEach(item => {
-                            const subName = item.querySelector('span').textContent;
-                            const subColorBox = item.querySelector('.legend-sub-color');
-                            if (subColorBox) {
-                                subColorBox.style.background = getSubColor(cat, subName);
-                            }
-                        });
-                    }
+        // Helper function for subcategory color resolution
+        function nodeColorForSubcategory(category, sub) {
+            const nodesInSub = globalNodes.filter(n => n.category === category && n.subcategory === sub);
+            if (nodesInSub.length > 0 && nodesInSub[0].color) {
+                return nodesInSub[0].color;
+            }
+            return catToColor[category] || '#cccccc';
+        }
+
+        // Sort categories alphabetically
+        const sortedCategories = Object.keys(db).sort((a, b) => a.localeCompare(b));
+
+        // Render 2-level tree: Major Category Titles -> Subcategory Accordions
+        sortedCategories.forEach(category => {
+            // Major Category Section Header
+            const sectionTitle = document.createElement('div');
+            sectionTitle.className = 'legend-section-title';
+            sectionTitle.textContent = category;
+            legendContainer.appendChild(sectionTitle);
+
+            const subcategories = db[category];
+            const sortedSubcategories = Object.keys(subcategories).sort((a, b) => a.localeCompare(b));
+
+            sortedSubcategories.forEach(sub => {
+                const docs = subcategories[sub];
+                const group = document.createElement('div');
+                group.className = 'legend-group';
+                group.classList.add('active'); // Keep expanded by default
+
+                const header = document.createElement('div');
+                header.className = 'legend-header';
+
+                const colorBox = document.createElement('div');
+                colorBox.className = 'legend-color';
+                colorBox.style.background = nodeColorForSubcategory(category, sub);
+
+                const label = document.createElement('span');
+                label.className = 'legend-title';
+                label.textContent = sub; // Subcategory accordion title (e.g. "os > linux")
+
+                const arrow = document.createElement('span');
+                arrow.className = 'legend-arrow';
+                arrow.textContent = '▼';
+
+                // Left 70% Area (Color Box + Name)
+                const leftArea = document.createElement('div');
+                leftArea.className = 'legend-header-left';
+                leftArea.appendChild(colorBox);
+                leftArea.appendChild(label);
+
+                // Right 30% Area (Arrow icon button)
+                const rightArea = document.createElement('div');
+                rightArea.className = 'legend-header-right';
+                rightArea.appendChild(arrow);
+
+                header.appendChild(leftArea);
+                header.appendChild(rightArea);
+
+                // Container for documents directly under this subcategory
+                const docContainer = document.createElement('div');
+                docContainer.className = 'legend-sub-list';
+                docContainer.style.gap = '2px';
+                docContainer.style.marginTop = '2px';
+                docContainer.style.width = '100%';
+                docContainer.style.paddingLeft = '10px';
+
+                // Sort documents alphabetically by title or filename
+                const sortedDocs = [...docs].sort((a, b) => {
+                    const titleA = a.node.metadata.title || a.node.metadata.filename || '';
+                    const titleB = b.node.metadata.title || b.node.metadata.filename || '';
+                    return titleA.localeCompare(titleB);
                 });
-                
-                picker.click();
-            });
 
-            // Helper to dynamically retrieve subcategory gradient colors
-            const getSubColor = (parent, sub) => {
-                const foundNode = globalNodes.find(n => {
-                    const cs = n.metadata.categories || ["Uncategorized"];
-                    return cs[0] === parent && (cs[1] || "General") === sub;
+                sortedDocs.forEach(({ node, index }) => {
+                    const docItem = document.createElement('div');
+                    docItem.className = 'legend-doc-item';
+                    docItem.textContent = node.metadata.title || node.metadata.filename;
+                    docItem.dataset.index = index;
+                    docItem.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        highlightNode(index);
+                    });
+                    docContainer.appendChild(docItem);
                 });
-                return foundNode ? foundNode.color : categories[parent];
-            };
 
-            const label = document.createElement('span');
-            label.className = 'legend-title';
-            label.textContent = cat;
+                const highlightKey = `${category} :: ${sub}`;
 
-            const arrow = document.createElement('span');
-            arrow.className = 'legend-arrow';
-            arrow.textContent = '▼';
+                // 1. Right area click: Toggle accordion open/close only, do not change graph highlight
+                rightArea.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const isActive = group.classList.toggle('active');
+                    arrow.textContent = isActive ? '▼' : '▶';
+                });
 
-            header.appendChild(colorBox);
-            header.appendChild(label);
-            header.appendChild(arrow);
-
-            // List of child subcategories
-            const subList = document.createElement('div');
-            subList.className = 'legend-sub-list';
-
-            const subsArray = Array.from(parentToSubs[cat] || []).sort();
-            subsArray.forEach(sub => {
-                const subItem = document.createElement('div');
-                subItem.className = 'legend-sub-item';
-
-                const subColorBox = document.createElement('div');
-                subColorBox.className = 'legend-sub-color';
-                subColorBox.style.background = getSubColor(cat, sub);
-
-                const subLabel = document.createElement('span');
-                subLabel.textContent = sub;
-
-                subItem.appendChild(subColorBox);
-                subItem.appendChild(subLabel);
-
-                // Filter to highlight subcategory nodes in real-time
-                subItem.addEventListener('click', function(e) {
+                // 2. Left area click: Toggle graph highlight only, do not close/open accordion
+                leftArea.addEventListener('click', function(e) {
                     e.stopPropagation();
                     
-                    const subKey = `${cat} > ${sub}`;
-                    const allSubItems = legendContainer.querySelectorAll('.legend-sub-item');
-                    
-                    if (activeSubHighlight === subKey) {
-                        // Fully clear filter when clicking the already active item
+                    if (activeSubHighlight === highlightKey) {
                         activeSubHighlight = null;
-                        subItem.classList.remove('active');
-                        applyGraphVisualState();
                     } else {
-                        // Activate highlighting for the new subcategory space
-                        activeSubHighlight = subKey;
-                        allSubItems.forEach(item => item.classList.remove('active'));
-                        subItem.classList.add('active');
-                        applyGraphVisualState();
+                        activeSubHighlight = highlightKey;
+                        lastHighlightedIndex = null;
+                        updateActiveDocItem(-1);
                     }
+                    applyGraphVisualState();
                 });
 
-                subList.appendChild(subItem);
+                group.appendChild(header);
+                if (docs.length > 0) {
+                    group.appendChild(docContainer);
+                }
+                legendContainer.appendChild(group);
             });
+        });
 
-            // Toggle accordion when clicking header region
-            header.addEventListener('click', function() {
-                group.classList.toggle('active');
-            });
-
-            group.appendChild(header);
-            if (subsArray.length > 0) {
-                group.appendChild(subList);
-            }
-            legendContainer.appendChild(group);
-        }
+        const nodeLineColor = currentTheme === 'light' ? 'rgba(36, 41, 47, 0.4)' : 'rgba(255, 255, 255, 0.1)';
 
         const nodeTrace = {
             x: globalNodes.map(n => n.x),
@@ -445,23 +522,18 @@ async function init() {
                 size: globalNodes.map(n => n.size),
                 color: globalNodes.map(n => n.color),
                 opacity: 0.9,
-                line: { color: 'rgba(255, 255, 255, 0.1)', width: 0.5 }
+                line: { color: nodeLineColor, width: 0.5 }
             },
             hoverinfo: 'text'
         };
 
-
-        const getFilteredEdges = (threshold, start, end) => {
+        const getFilteredEdges = (threshold) => {
             const edgeX = [], edgeY = [], edgeZ = [];
-            const sVal = start !== undefined ? start : minTimelineTime;
-            const eVal = end !== undefined ? end : maxTimelineTime;
             globalEdges.forEach(edge => {
                 const [sourceIdx, targetIdx, score] = edge;
                 if (score >= threshold) {
                     const s = globalNodes[sourceIdx], t = globalNodes[targetIdx];
-                    const sTime = getNodeTime(s);
-                    const tTime = getNodeTime(t);
-                    if (sTime >= sVal && sTime <= eVal && tTime >= sVal && tTime <= eVal) {
+                    if (s && t) {
                         edgeX.push(s.x, t.x, null); edgeY.push(s.y, t.y, null); edgeZ.push(s.z, t.z, null);
                     }
                 }
@@ -469,66 +541,17 @@ async function init() {
             return { x: edgeX, y: edgeY, z: edgeZ };
         };
 
-        // --- Timeline Initial Range Configuration ---
-        const nodeTimes = globalNodes.map(getNodeTime);
-        minTimelineTime = Math.min(...nodeTimes);
-        maxTimelineTime = Math.max(...nodeTimes);
-        
-        if (minTimelineTime === maxTimelineTime) {
-            minTimelineTime -= 24 * 60 * 60 * 1000;
-            maxTimelineTime += 24 * 60 * 60 * 1000;
-        }
-        
-        timelineStart = minTimelineTime;
-        timelineEnd = maxTimelineTime;
-        
-        const startSlider = document.getElementById('timeline-start-slider');
-        const endSlider = document.getElementById('timeline-end-slider');
-        
-        startSlider.min = minTimelineTime;
-        startSlider.max = maxTimelineTime;
-        startSlider.value = minTimelineTime;
-        startSlider.step = 24 * 60 * 60 * 1000;
-        
-        endSlider.min = minTimelineTime;
-        endSlider.max = maxTimelineTime;
-        endSlider.value = maxTimelineTime;
-        endSlider.step = 24 * 60 * 60 * 1000;
-        
-        document.getElementById('timeline-start-val').textContent = formatDate(minTimelineTime);
-        document.getElementById('timeline-end-val').textContent = formatDate(maxTimelineTime);
-        
-        startSlider.addEventListener('input', function() {
-            let val = parseFloat(this.value);
-            if (val > parseFloat(endSlider.value)) {
-                this.value = endSlider.value;
-                val = parseFloat(endSlider.value);
-            }
-            timelineStart = val;
-            document.getElementById('timeline-start-val').textContent = formatDate(val);
-            applyGraphVisualState();
-        });
-        
-        endSlider.addEventListener('input', function() {
-            let val = parseFloat(this.value);
-            if (val < parseFloat(startSlider.value)) {
-                this.value = startSlider.value;
-                val = parseFloat(startSlider.value);
-            }
-            timelineEnd = val;
-            document.getElementById('timeline-end-val').textContent = formatDate(val);
-            applyGraphVisualState();
-        });
-
-        const initialEdges = getFilteredEdges(currentThreshold, minTimelineTime, maxTimelineTime);
+        const initialEdges = getFilteredEdges(currentThreshold);
         originalEdgeX = initialEdges.x;
         originalEdgeY = initialEdges.y;
         originalEdgeZ = initialEdges.z;
 
+        const defaultEdgeColor = currentTheme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
+
         const edgeTrace = {
             x: originalEdgeX, y: originalEdgeY, z: originalEdgeZ,
             mode: 'lines', type: 'scatter3d',
-            line: { color: 'rgba(56, 189, 248, 0.15)', width: 1 },
+            line: { color: defaultEdgeColor, width: currentTheme === 'light' ? 1.5 : 1 },
             hoverinfo: 'none'
         };
 
@@ -546,93 +569,93 @@ async function init() {
 
         Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false });
 
-        const searchInput = document.getElementById('search-input');
-        const searchResults = document.getElementById('search-results');
+        const searchInput = document.getElementById('main-search-input');
+        const searchResults = document.getElementById('main-search-results');
         let searchTimeout;
 
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            const query = this.value.trim();
-            
-            if (!query) {
-                searchResults.classList.remove('active');
+        if (searchInput && searchResults) {
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value.trim();
+                
+                if (!query) {
+                    searchResults.classList.remove('active');
+                    searchResults.innerHTML = '';
+                    resetView();
+                    return;
+                }
+
+                searchTimeout = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
+                        const data = await response.json();
+                        
+                        if (data.status === 'success' && data.results.length > 0) {
+                            displaySearchResults(data.results);
+                        } else {
+                            searchResults.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                            searchResults.classList.add('active');
+                        }
+                    } catch (err) {
+                        console.error('Search error:', err);
+                    }
+                }, 300);
+            });
+
+            function displaySearchResults(results) {
                 searchResults.innerHTML = '';
-                resetView();
-                return;
-            }
+                searchResults.classList.add('active');
+                
+                const resultPaths = new Set(results.map(res => res.metadata.rel_path));
+                const resultIndices = new Set();
+                
+                globalNodes.forEach((node, i) => {
+                    if (resultPaths.has(node.metadata.rel_path)) {
+                        resultIndices.add(i);
+                    }
+                });
 
-            searchTimeout = setTimeout(async () => {
-                try {
-                    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
-                    const data = await response.json();
+                results.forEach(res => {
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
                     
-                    if (data.status === 'success' && data.results.length > 0) {
-                        displaySearchResults(data.results);
-                    } else {
-                        searchResults.innerHTML = '<div style="padding: 15px; color: #64748b; font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
-                        searchResults.classList.add('active');
-                    }
-                } catch (err) {
-                    console.error('Search error:', err);
+                    const meta = res.metadata;
+                    const score = res.rerank_score || res.score;
+                    const title = meta.title || meta.filename;
+                    
+                    item.innerHTML = `
+                        <div class="result-title">${title}</div>
+                        <div class="result-snippet">${res.text}</div>
+                        <div class="result-meta">
+                            <div class="result-score">Similarity: ${score.toFixed(4)}</div>
+                        </div>
+                    `;
+                    
+                    item.onclick = () => {
+                        const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
+                        if (nodeIndex !== -1) {
+                            highlightNode(nodeIndex);
+                            searchResults.classList.remove('active');
+                        } else {
+                            alert('Graph에서 해당 문서를 찾을 수 없습니다.');
+                        }
+                    };
+                    
+                    searchResults.appendChild(item);
+                });
+
+                if (resultIndices.size > 0) {
+                    activeSearchIndices = resultIndices;
+                    applyGraphVisualState();
                 }
-            }, 300);
-        });
-
-        function displaySearchResults(results) {
-            searchResults.innerHTML = '';
-            searchResults.classList.add('active');
-            
-            const resultPaths = new Set(results.map(res => res.metadata.rel_path));
-            const resultIndices = new Set();
-            
-            globalNodes.forEach((node, i) => {
-                if (resultPaths.has(node.metadata.rel_path)) {
-                    resultIndices.add(i);
-                }
-            });
-
-            results.forEach(res => {
-                const item = document.createElement('div');
-                item.className = 'search-result-item';
-                
-                const meta = res.metadata;
-                const score = res.rerank_score || res.score;
-                const title = meta.title || meta.filename;
-                
-                item.innerHTML = `
-                    <div class="result-title">${title}</div>
-                    <div class="result-snippet">${res.text}</div>
-                    <div class="result-meta">
-                        <div class="result-score">Similarity: ${score.toFixed(4)}</div>
-                    </div>
-                `;
-                
-                item.onclick = () => {
-                    const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
-                    if (nodeIndex !== -1) {
-                        highlightNode(nodeIndex);
-                        searchResults.classList.remove('active');
-                    } else {
-                        alert('Graph에서 해당 문서를 찾을 수 없습니다.');
-                    }
-                };
-                
-                searchResults.appendChild(item);
-            });
-
-            // Update graph to highlight search results
-            if (resultIndices.size > 0) {
-                activeSearchIndices = resultIndices;
-                applyGraphVisualState();
             }
+
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.classList.remove('active');
+                }
+            });
         }
-
-        // Close search results when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-                searchResults.classList.remove('active');
-            }
-        });
 
         const thresholdSlider = document.getElementById('threshold-slider');
         const thresholdVal = document.getElementById('threshold-val');
@@ -657,7 +680,6 @@ async function init() {
         plotDiv.addEventListener('mousedown', () => { isUserInteracting = true; });
         window.addEventListener('mouseup', () => { isUserInteracting = false; });
 
-        // Handle Mouse Wheel (Zoom)
         let wheelActive = false;
         let wheelTimer;
         plotDiv.addEventListener('wheel', () => {
@@ -666,7 +688,6 @@ async function init() {
             wheelTimer = setTimeout(() => { wheelActive = false; }, 150);
         }, { passive: true });
 
-        // Sync camera state on manual change
         plotDiv.on('plotly_relayout', function(eventData) {
             const eye = eventData['scene.camera.eye'] || (eventData['scene.camera'] && eventData['scene.camera'].eye);
             if (eye) {
@@ -681,7 +702,6 @@ async function init() {
                 return;
             }
             
-            // If wheeling, slow down update rate significantly to prevent jitter
             frameCount++;
             const throttle = wheelActive ? 5 : 2; 
             if (frameCount % throttle !== 0) {
@@ -698,14 +718,12 @@ async function init() {
             const currentEye = currentLayout.scene.camera.eye;
             const radius = Math.sqrt(currentEye.x ** 2 + currentEye.y ** 2);
             
-            // Increment angle
             orbitAngle += wheelActive ? 0.001 : 0.004;
             
             const x = radius * Math.cos(orbitAngle);
             const y = radius * Math.sin(orbitAngle);
             
             try {
-                // Use await to ensure the browser finishes rendering before next frame
                 await Plotly.relayout('plot', {
                     'scene.camera.eye': { x: x, y: y, z: currentEye.z }
                 });
@@ -714,21 +732,35 @@ async function init() {
             if (isAutoOrbit) requestAnimationFrame(animate);
         }
 
-        // Start animation after a short delay
         setTimeout(() => { if (isAutoOrbit) requestAnimationFrame(animate); }, 1000);
 
+        let plotlyClickFired = false;
         plotDiv.on('plotly_click', function(eventData) {
+            plotlyClickFired = true;
             if (isUpdating) return;
             if (!eventData || !eventData.points || eventData.points.length === 0) { resetView(); return; }
             const p = eventData.points[0];
             if (p.fullData.mode !== 'markers') { resetView(); return; }
-            highlightNode(p.pointNumber);
+            selectGraphNode(p.pointNumber);
+        });
+
+        // Plotly 3D does not fire plotly_click on empty space, so use native click
+        plotDiv.addEventListener('click', function() {
+            setTimeout(() => {
+                if (!plotlyClickFired && lastHighlightedIndex !== null) {
+                    resetView();
+                }
+                plotlyClickFired = false;
+            }, 200);
         });
 
         document.getElementById('close-panel-btn').onclick = resetView;
         window.addEventListener('keydown', e => { if (e.key === 'Escape') resetView(); });
 
-        document.getElementById('doc-count').textContent = `Stored: ${globalNodes.length} thoughts`;
+        const docCountEl = document.getElementById('doc-count');
+        if (docCountEl) {
+            docCountEl.textContent = `(${globalNodes.length})`;
+        }
 
         const syncBtn = document.getElementById('sync-btn');
         syncBtn.addEventListener('click', async () => {
@@ -740,9 +772,6 @@ async function init() {
                 const res = await fetch('/api/sync', { method: 'POST' });
                 const result = await res.json();
                 if (result.status === 'success') {
-                    // Success! Reload the data.
-                    // We can just re-init everything or reload the page.
-                    // Reloading the page is simpler for now to ensure everything is fresh.
                     location.reload();
                 } else {
                     alert('Sync failed: ' + result.message);
@@ -753,7 +782,7 @@ async function init() {
             } finally {
                 syncBtn.disabled = false;
                 syncBtn.classList.remove('loading');
-                syncBtn.innerHTML = 'Sync DB';
+                syncBtn.innerHTML = 'Sync';
             }
         });
 
@@ -773,9 +802,28 @@ async function highlightNode(index) {
         let mathBlocks = [];
 
         document.getElementById('info-title').textContent = item.metadata.title || item.metadata.filename;
-        document.getElementById('info-path').textContent = item.metadata.rel_path;
+        const rawPath = item.metadata.rel_path;
+        const lastSlash = rawPath.lastIndexOf('/');
+        const cleanPath = lastSlash !== -1 ? rawPath.substring(0, lastSlash).replace(/\//g, ' > ') : '';
+        document.getElementById('info-path').textContent = cleanPath;
+
+        // Display Created and Modified dates
+        let createdStr = '-';
+        if (item.metadata && item.metadata.date) {
+            createdStr = formatDate(item.metadata.date);
+        } else if (item.mtime) {
+            createdStr = formatDate(item.mtime * 1000);
+        }
+        document.getElementById('info-created').textContent = createdStr;
+
+        let modifiedStr = '-';
+        if (item.metadata && item.metadata.last_modified) {
+            modifiedStr = formatDate(item.metadata.last_modified);
+        } else if (item.mtime) {
+            modifiedStr = formatDate(item.mtime * 1000);
+        }
+        document.getElementById('info-modified').textContent = modifiedStr;
         
-        // --- Image Path Resolution ---
         let processedContent = item.text;
         const docPath = item.metadata.rel_path;
         const docDir = docPath.substring(0, docPath.lastIndexOf('/') + 1);
@@ -792,103 +840,190 @@ async function highlightNode(index) {
             return `![${alt}](${stack.join('/')})`;
         });
 
-        // Remove context headings added by indexer (e.g., [# Heading])
-        processedContent = processedContent.replace(/^\[#{1,6}.+?\]\n+/gm, '');
-        // Protect display math ($$, \[...\])
+        processedContent = processedContent.replace(/^\[.+?\]\n+/gm, '');
         processedContent = processedContent.replace(/\$\$(.*?)\$\$|\\\[(.*?)\\\]/gs, (match) => {
             const id = `@@MATH_DISPLAY${mathBlocks.length}@@`;
             mathBlocks.push(match);
             return id;
         });
-
-        // Protect inline math ($, \(...\)) - Do not use 's' flag for single $ to avoid eating multi-line blocks
-        processedContent = processedContent.replace(/\$([^$\n]+?)\$|\\\((.*?)\\\)/g, (match) => {
+        processedContent = processedContent.replace(/\$(.*?)\$|\\\(.*?\\\)/g, (match) => {
             const id = `@@MATH_INLINE${mathBlocks.length}@@`;
             mathBlocks.push(match);
             return id;
         });
 
-        const infoContent = document.getElementById('info-content');
-        let html = marked.parse(processedContent.substring(0, 5000));
-        
-        // --- Math Restoration: Restore math tokens ---
-        html = html.replace(/@@MATH_(DISPLAY|INLINE)(\d+)@@/g, (match, type, id) => {
-            return mathBlocks[parseInt(id)];
-        });
-        
-        infoContent.innerHTML = html;
-        
-        // --- Render Math using KaTeX auto-render ---
-        renderMathInElement(infoContent, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false},
-                {left: '\\(', right: '\\)', display: false},
-                {left: '\\[', right: '\\]', display: true}
-            ],
-            throwOnError : false
-        });
-        
-        const tagsContainer = document.getElementById('info-tags');
-        tagsContainer.innerHTML = '';
-        (item.metadata.tags || []).forEach(tag => {
-            const span = document.createElement('span');
-            span.className = 'tag';
-            span.textContent = tag;
-            tagsContainer.appendChild(span);
-        });
+        let renderedHtml = marked.parse(processedContent);
 
-        const connectedIndices = new Set();
-        const hX = [], hY = [], hZ = [];
-        globalEdges.forEach(edge => {
-            const [sIdx, tIdx, score] = edge;
-            if (score >= currentThreshold && (sIdx === index || tIdx === index)) {
-                const neighborIdx = (sIdx === index ? tIdx : sIdx);
-                connectedIndices.add(neighborIdx);
-                const s = globalNodes[sIdx], t = globalNodes[tIdx];
-                hX.push(s.x, t.x, null); hY.push(s.y, t.y, null); hZ.push(s.z, t.z, null);
+        // Convert GFM alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
+        // Supports both multiline and inline (> [!NOTE] > content) formats under a unified regex
+        renderedHtml = renderedHtml.replace(
+            /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:(?:&gt;|>)\s*)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
+            (match, type, content) => {
+                const t = type.toUpperCase();
+                const icons = { NOTE: 'ℹ️', TIP: '💡', IMPORTANT: '❗', WARNING: '⚠️', CAUTION: '🔴' };
+                return `<div class="gfm-alert gfm-alert-${t.toLowerCase()}"><p class="gfm-alert-title">${icons[t] || ''} ${t}</p><p>${content.trim()}</p></div>`;
+            }
+        );
+
+        mathBlocks.forEach((math, idx) => {
+            const displayId = `@@MATH_DISPLAY${idx}@@`;
+            const inlineId = `@@MATH_INLINE${idx}@@`;
+            
+            if (renderedHtml.includes(displayId)) {
+                const cleanedMath = math.replace(/\$\$/g, '').replace(/\\\[|\\\]/g, '');
+                let katexHtml = cleanedMath;
+                try {
+                    katexHtml = katex.renderToString(cleanedMath, { displayMode: true, throwOnError: false });
+                } catch (err) {}
+                renderedHtml = renderedHtml.replace(displayId, katexHtml);
+            } else if (renderedHtml.includes(inlineId)) {
+                const cleanedMath = math.replace(/\$/g, '').replace(/\\\(|\\\)/g, '');
+                let katexHtml = cleanedMath;
+                try {
+                    katexHtml = katex.renderToString(cleanedMath, { displayMode: false, throwOnError: false });
+                } catch (err) {}
+                renderedHtml = renderedHtml.replace(inlineId, katexHtml);
             }
         });
 
-        const relatedList = document.getElementById('related-list');
-        relatedList.innerHTML = '';
-        if (connectedIndices.size === 0) {
-            relatedList.innerHTML = '<div style="font-size: 0.75rem; color: #64748b;">연결된 지식이 없습니다.</div>';
-        } else {
-            connectedIndices.forEach(idx => {
-                const neighbor = globalNodes[idx];
-                const div = document.createElement('div');
-                div.className = 'related-item';
-                div.textContent = neighbor.metadata.title || neighbor.metadata.filename;
-                div.onclick = (e) => { e.stopPropagation(); highlightNode(idx); };
-                relatedList.appendChild(div);
+        const infoContentEl = document.getElementById('info-content');
+        infoContentEl.innerHTML = renderedHtml;
+        
+        renderMathInElement(infoContentEl, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\(', right: '\\)', display: false },
+                { left: '\\[', right: '\\]', display: true }
+            ],
+            throwOnError: false
+        });
+
+        const tagsContainer = document.getElementById('info-tags');
+        tagsContainer.innerHTML = '';
+        if (item.metadata.tags) {
+            item.metadata.tags.forEach(t => {
+                const tagEl = document.createElement('span');
+                tagEl.className = 'tag';
+                tagEl.textContent = t;
+                tagsContainer.appendChild(tagEl);
             });
         }
 
-        applyGraphVisualState();
+        const relatedList = document.getElementById('related-list');
+        relatedList.innerHTML = '';
+        
+        const connectedEdges = globalEdges.filter(edge => {
+            const [sIdx, tIdx, score] = edge;
+            return score >= currentThreshold && (sIdx === index || tIdx === index);
+        });
 
-        document.getElementById('info-panel').classList.add('active');
-    } catch (e) { console.error('Highlight error:', e); }
-    finally { setTimeout(() => { isUpdating = false; }, 100); }
+        connectedEdges.sort((a, b) => b[2] - a[2]);
+
+        connectedEdges.forEach(edge => {
+            const [sIdx, tIdx, score] = edge;
+            const targetIdx = (sIdx === index) ? tIdx : sIdx;
+            const targetNode = globalNodes[targetIdx];
+            if (targetNode) {
+                const relEl = document.createElement('div');
+                relEl.className = 'related-item';
+                relEl.innerHTML = `
+                    <div style="font-weight:600; color: var(--accent-color);">${targetNode.metadata.title || targetNode.metadata.filename}</div>
+                    <div style="font-size:0.7rem; color:var(--text-secondary); margin-top:2px;">Similarity: ${score.toFixed(4)}</div>
+                `;
+                relEl.onclick = (e) => {
+                    e.stopPropagation();
+                    highlightNode(targetNode.index !== undefined ? targetNode.index : targetIdx);
+                };
+                relatedList.appendChild(relEl);
+            }
+        });
+
+        if (connectedEdges.length === 0) {
+            relatedList.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">연관 지식 링크가 존재하지 않음.</div>';
+        }
+
+        applyGraphVisualState();
+        updateActiveDocItem(index);
+        
+        // Show Document Content View & Hide Welcome View
+        document.getElementById('welcome-view').style.display = 'none';
+        document.getElementById('doc-view').style.display = 'block';
+        
+        // Scroll containers to top
+        document.querySelector('.main-content').scrollTop = 0;
+        document.getElementById('doc-view').scrollTop = 0;
+
+    } catch (err) {
+        console.error('Highlight error:', err);
+    } finally {
+        isUpdating = false;
+    }
 }
 
-async function resetView() {
+let lastClickTime = 0;
+
+function selectGraphNode(index) {
     if (isUpdating) return;
     isUpdating = true;
     try {
-        // Rollback all subcategory highlighting filter settings
+        const item = globalNodes[index];
+        if (!item) return;
+
+        const now = Date.now();
+        // Second click on same node opens document detail (guard against Plotly double fire within 300ms)
+        if (lastHighlightedIndex === index) {
+            if (now - lastClickTime > 300) {
+                isUpdating = false;
+                highlightNode(index);
+                return;
+            }
+            return;
+        }
+
+        // Clear active category highlight when selecting a single node
         activeSubHighlight = null;
-        const allSubItems = document.querySelectorAll('.legend-sub-item');
-        allSubItems.forEach(item => item.classList.remove('active'));
+        const allHeaders = document.querySelectorAll('.legend-sub-item div');
+        allHeaders.forEach(h => h.classList.remove('active'));
 
-        activeSearchIndices = null;
-        lastHighlightedIndex = null;
+        lastHighlightedIndex = index;
+        lastClickTime = now;
         applyGraphVisualState();
-
-        document.getElementById('info-panel').classList.remove('active');
-        document.getElementById('search-input').value = '';
-    } catch (e) { console.error('Reset error:', e); }
-    finally { setTimeout(() => { isUpdating = false; }, 100); }
+        updateActiveDocItem(index);
+    } catch (err) {
+        console.error('Select node error:', err);
+    } finally {
+        isUpdating = false;
+    }
 }
 
-init();
+function resetView() {
+    if (isUpdating) return;
+    isUpdating = true;
+    try {
+        lastHighlightedIndex = null;
+        activeSearchIndices = null;
+        
+        // Clear search values
+        const searchInput = document.getElementById('main-search-input');
+        const searchResults = document.getElementById('main-search-results');
+        if (searchInput) searchInput.value = '';
+        if (searchResults) {
+            searchResults.innerHTML = '';
+            searchResults.classList.remove('active');
+        }
+        
+        // Show Welcome View & Hide Document Content View
+        document.getElementById('welcome-view').style.display = 'block';
+        document.getElementById('doc-view').style.display = 'none';
+        
+        applyGraphVisualState();
+        updateActiveDocItem(-1);
+    } catch (err) {
+        console.error('Reset view error:', err);
+    } finally {
+        isUpdating = false;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', init);
