@@ -74,10 +74,10 @@ async function applyGraphVisualState() {
         } else if (activeSubHighlight !== null) {
             const [cat, sub] = activeSubHighlight.split(' :: ');
             baseOpacities = globalNodes.map(n => {
-                return (n.category === cat && n.subcategory === sub) ? 1.0 : 0.08;
+                return (n.category === cat && (n.subcategory === sub || n.subcategory.startsWith(sub + ' > '))) ? 1.0 : 0.08;
             });
             baseSizes = globalNodes.map(n => {
-                const isMatch = n.category === cat && n.subcategory === sub;
+                const isMatch = n.category === cat && (n.subcategory === sub || n.subcategory.startsWith(sub + ' > '));
                 return isMatch ? n.size : 1.5;
             });
         } else if (activeSearchIndices !== null) {
@@ -127,7 +127,7 @@ async function applyGraphVisualState() {
             const [cat, sub] = activeSubHighlight.split(' :: ');
             const subCategoryNodeIndices = new Set();
             globalNodes.forEach((n, i) => {
-                if (n.category === cat && n.subcategory === sub) {
+                if (n.category === cat && (n.subcategory === sub || n.subcategory.startsWith(sub + ' > '))) {
                     subCategoryNodeIndices.add(i);
                 }
             });
@@ -432,6 +432,7 @@ async function init() {
                 const label = document.createElement('span');
                 label.className = 'legend-title';
                 label.textContent = sub; // Subcategory accordion title (e.g. "os > linux")
+                label.title = sub;
 
                 const arrow = document.createElement('span');
                 arrow.className = 'legend-arrow';
@@ -439,7 +440,9 @@ async function init() {
 
                 // Left 70% Area (Color Box + Name)
                 const leftArea = document.createElement('div');
-                leftArea.className = 'legend-header-left';
+                leftArea.className = 'legend-header-left legend-subcategory-trigger';
+                leftArea.dataset.category = category;
+                leftArea.dataset.subcategory = sub;
                 leftArea.appendChild(colorBox);
                 leftArea.appendChild(label);
 
@@ -499,6 +502,7 @@ async function init() {
                         updateActiveDocItem(-1);
                     }
                     applyGraphVisualState();
+                    updateActiveSubcategories();
                 });
 
                 group.appendChild(header);
@@ -983,8 +987,7 @@ function selectGraphNode(index) {
 
         // Clear active category highlight when selecting a single node
         activeSubHighlight = null;
-        const allHeaders = document.querySelectorAll('.legend-sub-item div');
-        allHeaders.forEach(h => h.classList.remove('active'));
+        updateActiveSubcategories();
 
         lastHighlightedIndex = index;
         lastClickTime = now;
@@ -997,12 +1000,32 @@ function selectGraphNode(index) {
     }
 }
 
+function updateActiveSubcategories() {
+    const triggers = document.querySelectorAll('.legend-subcategory-trigger');
+    if (activeSubHighlight !== null) {
+        const [cat, sub] = activeSubHighlight.split(' :: ');
+        triggers.forEach(tr => {
+            const trCat = tr.dataset.category;
+            const trSub = tr.dataset.subcategory;
+            if (trCat === cat && (trSub === sub || trSub.startsWith(sub + ' > '))) {
+                tr.classList.add('active');
+            } else {
+                tr.classList.remove('active');
+            }
+        });
+    } else {
+        triggers.forEach(tr => tr.classList.remove('active'));
+    }
+}
+
 function resetView() {
     if (isUpdating) return;
     isUpdating = true;
     try {
         lastHighlightedIndex = null;
         activeSearchIndices = null;
+        activeSubHighlight = null;
+        updateActiveSubcategories();
         
         // Clear search values
         const searchInput = document.getElementById('main-search-input');

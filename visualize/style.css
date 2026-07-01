@@ -213,6 +213,16 @@ body {
     gap: 0.5rem;
     padding: 0.3rem 0;
     min-width: 0;
+    transition: color 0.15s ease;
+}
+
+.legend-header-left:hover,
+.legend-header-left.active {
+    color: var(--accent-color);
+}
+
+.legend-header-left.active .legend-title {
+    font-weight: 700;
 }
 
 .legend-header-right {
@@ -233,6 +243,15 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-height: 1.2rem;
+    line-height: 1.2;
+    transition: max-height 0.25s ease-in-out;
+}
+
+.legend-header-left:hover .legend-title {
+    white-space: normal;
+    word-break: break-all;
+    max-height: 4.8rem;
 }
 .legend-arrow {
     font-size: 0.5rem;
