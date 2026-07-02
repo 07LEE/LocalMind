@@ -58,6 +58,22 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# 3.4. Extract Visualization Data
+echo -e "${CYAN}${BOLD}📊 Extracting Visualization Data...${RESET}"
+python3 src/viz/extract_viz_data.py
+if [ $? -ne 0 ]; then
+    echo -e "\033[31m✖ Error: Data extraction failed.${RESET}"
+    exit 1
+fi
+
+# 3.5. Encrypt Visualization Data
+echo -e "${CYAN}${BOLD}🔒 Encrypting Visualization Data...${RESET}"
+python3 src/viz/encrypt_viz_data.py
+if [ $? -ne 0 ]; then
+    echo -e "\033[31m✖ Error: Data encryption failed.${RESET}"
+    exit 1
+fi
+
 # 4. Launch Search Engine
 if [ $# -eq 0 ]; then
     # No arguments: Interactive Mode

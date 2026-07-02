@@ -118,6 +118,21 @@ def parse_markdown(filepath, rel_path=""):
     # Extract categories from the directory structure
     categories = [p for p in os.path.dirname(rel_path).split(os.sep) if p]
 
+    # Extract dates from frontmatter if available
+    date = frontmatter.get("date") or frontmatter.get("created")
+    if date:
+        if hasattr(date, "strftime"):
+            date = date.strftime("%Y-%m-%d")
+        else:
+            date = str(date)
+
+    last_modified = frontmatter.get("last_modified") or frontmatter.get("modified") or frontmatter.get("updated")
+    if last_modified:
+        if hasattr(last_modified, "strftime"):
+            last_modified = last_modified.strftime("%Y-%m-%d")
+        else:
+            last_modified = str(last_modified)
+
     # Clean stylistic noise in the body text (e.g., "## Header (English)" -> "## Header")
     # This prevents the style from influencing semantic similarity.
     # Note: Code blocks are NOT removed here anymore to allow reconstruction in display_text.
@@ -151,6 +166,8 @@ def parse_markdown(filepath, rel_path=""):
             "title": title, 
             "tags": tags,
             "categories": categories,
+            "date": date,
+            "last_modified": last_modified,
             "display_text": chunk # Store the RAW chunk for viz
         }
         final_metadatas.append(meta)
