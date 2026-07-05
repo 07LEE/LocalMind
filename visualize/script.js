@@ -239,11 +239,16 @@ function updatePlotlyTheme(theme) {
     
     const edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
     const nodeLineColor = theme === 'light' ? 'rgba(36, 41, 47, 0.4)' : 'rgba(201, 209, 217, 0.1)';
+    const kwEdgeColor = theme === 'light' ? 'rgba(167, 139, 250, 0.3)' : 'rgba(167, 139, 250, 0.08)';
     
     Plotly.restyle('plot', {
-        'line.color': lastHighlightedIndex !== null ? 'rgba(58, 166, 255, 0.8)' : edgeColor,
+        'line.color': lastHighlightedIndex !== null ? (globalNodes[lastHighlightedIndex].is_keyword ? 'rgba(88, 166, 255, 0.15)' : 'rgba(58, 166, 255, 0.8)') : edgeColor,
         'marker.line.color': nodeLineColor
     }, [0, 1]).catch(() => {});
+
+    Plotly.restyle('plot', {
+        'line.color': lastHighlightedIndex !== null ? (globalNodes[lastHighlightedIndex].is_keyword ? 'rgba(167, 139, 250, 0.8)' : 'rgba(167, 139, 250, 0.6)') : kwEdgeColor,
+    }, [2]).catch(() => {});
 }
 
 async function init() {
@@ -288,13 +293,19 @@ async function init() {
             headerIds: false, 
             mangle: false 
         });
-            const response = await fetch('/data/viz-data.json');
+        const response = await fetch('/data/viz-data.json');
         const data = await response.json();
         globalNodes = data.nodes;
         globalEdges = data.edges;
+        globalKeywordEdges = data.keyword_edges || [];
 
-        // Setup category, subcategory, and rootSubcategory for each node based on physical folder structure
         globalNodes.forEach(node => {
+            if (node.is_keyword) {
+                node.category = 'Keyword';
+                node.subcategory = 'Keyword';
+                node.rootSubcategory = 'Keyword';
+                return;
+            }
             const rawPath = node.metadata.rel_path;
             const parts = rawPath.split('/').filter(p => p);
             let category = 'General';
@@ -305,7 +316,7 @@ async function init() {
                 category = parts[0];
                 if (parts.length > 2) {
                     subcategory = parts.slice(1, -1).join(' > ');
-                    rootSub = parts[1]; // First directory under Notes/Journey
+                    rootSub = parts[1];
                 } else {
                     subcategory = parts[0];
                     rootSub = parts[0];
@@ -316,9 +327,9 @@ async function init() {
             node.rootSubcategory = rootSub;
         });
 
-        // Generate distinct HSL hues for first-level subdirectories (rootSubcategory)
         const rootSubsSet = new Set();
         globalNodes.forEach(node => {
+            if (node.is_keyword) return;
             rootSubsSet.add(`${node.category}::${node.rootSubcategory}`);
         });
         const sortedRootSubs = Array.from(rootSubsSet).sort();
@@ -326,15 +337,13 @@ async function init() {
 
         const rootSubToColor = {};
         sortedRootSubs.forEach((key, idx) => {
-            // Distribute Hue evenly across 360 degrees
             const h = idx / numRootSubs;
-            // Highlighted HSL representing distinct root subcategories - tone down to soft pastel HSL
             rootSubToColor[key] = { h, l: 0.60, s: 0.40 };
         });
 
-        // Generate modulated colors for nested subcategories
         const rootToSubs = {};
         globalNodes.forEach(node => {
+            if (node.is_keyword) return;
             const rKey = `${node.category}::${node.rootSubcategory}`;
             if (!rootToSubs[rKey]) {
                 rootToSubs[rKey] = new Set();
@@ -352,7 +361,6 @@ async function init() {
                 if (numSubs <= 1) {
                     subToColorMap[`${rKey}::${sub}`] = hlsToHex(baseColor.h, baseColor.l, baseColor.s);
                 } else {
-                    // Keep hue identical, modulate lightness and saturation inside a soft pastel range
                     const lightnessOffset = -0.12 + (subIdx * 0.24 / (numSubs - 1));
                     const saturationOffset = -0.08 + (subIdx * 0.16 / (numSubs - 1));
                     const modulatedL = Math.max(0.45, Math.min(0.75, baseColor.l + lightnessOffset));
@@ -362,8 +370,8 @@ async function init() {
             });
         });
 
-        // Set final calculated color for each node
         globalNodes.forEach(node => {
+            if (node.is_keyword) return;
             const rKey = `${node.category}::${node.rootSubcategory}`;
             const subKey = `${rKey}::${node.subcategory}`;
             node.color = subToColorMap[subKey] || "#cccccc";
@@ -372,11 +380,11 @@ async function init() {
         const legendContainer = document.getElementById('legend');
         legendContainer.innerHTML = '';
 
-        // Organize documents under unified 2-level structure: Category (Major) -> Subcategory (Accordion)
         const db = {};
         const catToColor = {};
 
         globalNodes.forEach((node, nodeIdx) => {
+            if (node.is_keyword) return;
             const category = node.category;
             const subcategory = node.subcategory;
             
@@ -745,7 +753,13 @@ async function init() {
             if (!eventData || !eventData.points || eventData.points.length === 0) { resetView(); return; }
             const p = eventData.points[0];
             if (p.fullData.mode !== 'markers') { resetView(); return; }
-            selectGraphNode(p.pointNumber);
+            
+            // CurveNumber 1 is nodeTrace
+            if (p.curveNumber === 1 && p.pointNumber !== undefined) {
+                selectGraphNode(p.pointNumber);
+            } else {
+                resetView();
+            }
         });
 
         // Plotly 3D does not fire plotly_click on empty space, so use native click
@@ -804,6 +818,53 @@ async function highlightNode(index) {
         if (!item) return;
         
         let mathBlocks = [];
+
+        if (item.is_keyword) {
+            document.getElementById('info-title').textContent = `# ${item.metadata.title}`;
+            document.getElementById('info-path').textContent = "Keyword";
+            document.getElementById('info-created').textContent = '-';
+            document.getElementById('info-modified').textContent = '-';
+            
+            const connectedDocs = [];
+            globalKeywordEdges.forEach(edge => {
+                const [dIdx, kIdx] = edge;
+                if (kIdx === index) {
+                    const docNode = globalNodes[dIdx];
+                    if (docNode) connectedDocs.push(docNode);
+                }
+            });
+
+            const docListHtml = connectedDocs.map(d => `- ${d.metadata.title || d.metadata.filename}`).join('\n');
+            const cleanExplanation = `### 키워드: ${item.metadata.title}\n\n이 단어는 다음 ${connectedDocs.length}개의 문서에서 빈번하게 등장하거나 중요 태그로 지정되어 있습니다. 아래 목록이나 그래프에서 연관된 문서를 클릭하여 지식 간의 흐름을 확인해 보세요.\n\n${docListHtml}`;
+            
+            const renderedHtml = marked.parse(cleanExplanation);
+            document.getElementById('info-content').innerHTML = renderedHtml;
+            document.getElementById('info-tags').innerHTML = '';
+            
+            const relatedList = document.getElementById('related-list');
+            relatedList.innerHTML = '';
+            connectedDocs.forEach(doc => {
+                const relEl = document.createElement('div');
+                relEl.className = 'related-item';
+                relEl.innerHTML = `
+                    <div style="font-weight:600; color: var(--accent-color);">${doc.metadata.title || doc.metadata.filename}</div>
+                `;
+                relEl.onclick = (e) => {
+                    e.stopPropagation();
+                    highlightNode(doc.id);
+                };
+                relatedList.appendChild(relEl);
+            });
+            
+            applyGraphVisualState();
+            updateActiveDocItem(-1);
+            
+            document.getElementById('welcome-view').style.display = 'none';
+            document.getElementById('doc-view').style.display = 'block';
+            document.querySelector('.main-content').scrollTop = 0;
+            document.getElementById('doc-view').scrollTop = 0;
+            return;
+        }
 
         document.getElementById('info-title').textContent = item.metadata.title || item.metadata.filename;
         const rawPath = item.metadata.rel_path;
