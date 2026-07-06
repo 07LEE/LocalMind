@@ -20,9 +20,15 @@ class DenseIndex:
         Args:
             model_name (str): Name or path of the sentence-transformer model.
         """
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self.model = None
         self.vectors = None
         self.index = None
+
+    def _load_model(self):
+        """Initializes the sentence-transformer model lazily."""
+        if self.model is None:
+            self.model = SentenceTransformer(self.model_name)
 
     def embed(self, texts):
         """Calculates normalized embeddings for a list of texts.
@@ -33,6 +39,7 @@ class DenseIndex:
         Returns:
             np.ndarray: Normalized embedding vectors of shape (n_texts, dimension).
         """
+        self._load_model()
         embeddings = self.model.encode(texts)
         # L2 Normalization for cosine similarity
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -81,6 +88,7 @@ class DenseIndex:
         if self.index is None or len(documents) == 0:
             return []
 
+        self._load_model()
         # 1. Encode and normalize query
         query_vector = self.model.encode(query).reshape(1, -1).astype('float32')
         faiss.normalize_L2(query_vector)

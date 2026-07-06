@@ -21,8 +21,7 @@ db = SimpleVectorDB()
 if os.path.exists(DB_DEFAULT_PATH):
     db.load(DB_DEFAULT_PATH)
 
-# Pre-load models to avoid delay on first search
-db.pre_load_models()
+# Models will be lazy-loaded on the first search request
 
 @app.after_request
 def add_header(response):
@@ -95,6 +94,12 @@ def search():
         return jsonify({"results": []})
         
     try:
+        # Lazy load models if they are not loaded yet
+        if not hasattr(db, 'models_loaded') or not db.models_loaded:
+            print("LOGE: [Server] Lazy-loading models on first search request...")
+            db.pre_load_models()
+            db.models_loaded = True
+
         # Increase initial k for hybrid search before reranking
         initial_k = max(top_k * 5, 10)
         results = db.search_hybrid(query, top_k=initial_k)

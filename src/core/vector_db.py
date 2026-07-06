@@ -34,7 +34,9 @@ class SimpleVectorDB:
     def pre_load_models(self):
         """Pre-loads the embedding and re-ranking models into memory."""
         print(f"LOGE: [VectorDB] Pre-loading models...")
-        # Dense engine already initializes its model in its constructor
+        # Force load dense embedding model
+        self.dense_engine._load_model()
+        # Force load reranker
         if self.reranker is None:
             self.reranker = CrossEncoder(self.rerank_model_name)
         print(f"LOGE: [VectorDB] All models loaded.")
