@@ -1,6 +1,7 @@
 let globalNodes = [];
 let globalEdges = [];
 let originalEdgeX = [], originalEdgeY = [], originalEdgeZ = [];
+let currentScrollSpyHandler = null;
 let isUpdating = false;
 let currentThreshold = 0.80;
 let lastHighlightedIndex = null;
@@ -840,6 +841,7 @@ async function highlightNode(index) {
             const renderedHtml = marked.parse(cleanExplanation);
             document.getElementById('info-content').innerHTML = renderedHtml;
             document.getElementById('info-tags').innerHTML = '';
+            document.getElementById('toc-sidebar').style.display = 'none';
             
             const relatedList = document.getElementById('related-list');
             relatedList.innerHTML = '';
@@ -963,6 +965,79 @@ async function highlightNode(index) {
             ],
             throwOnError: false
         });
+
+        // Generate Table of Contents (TOC) with Scroll Spy (Filter only H3 and H4)
+        const headers = infoContentEl.querySelectorAll('h3, h4');
+        const tocList = document.getElementById('toc-list');
+        const tocSidebar = document.getElementById('toc-sidebar');
+        const docView = document.getElementById('doc-view');
+        
+        // Clean up previous scroll listener
+        if (docView && currentScrollSpyHandler) {
+            docView.removeEventListener('scroll', currentScrollSpyHandler);
+            currentScrollSpyHandler = null;
+        }
+        
+        tocList.innerHTML = '';
+        
+        if (headers.length === 0) {
+            tocSidebar.style.display = 'none';
+        } else {
+            tocSidebar.style.display = 'block';
+            const headerElements = Array.from(headers);
+            const tocItems = [];
+            
+            headerElements.forEach((header, idx) => {
+                const headerId = `toc-section-${idx}`;
+                header.id = headerId;
+                
+                const li = document.createElement('li');
+                li.className = `toc-item toc-item-${header.tagName.toLowerCase()}`;
+                li.textContent = header.textContent;
+                
+                li.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    
+                    document.querySelectorAll('.toc-item').forEach(el => el.classList.remove('active'));
+                    li.classList.add('active');
+                });
+                
+                tocList.appendChild(li);
+                tocItems.push(li);
+            });
+            
+            // Notion-like Scroll Spy Implementation
+            const handleScrollSpy = () => {
+                let activeIndex = 0;
+                const scrollContainerTop = docView.getBoundingClientRect().top;
+                
+                for (let i = 0; i < headerElements.length; i++) {
+                    const rect = headerElements[i].getBoundingClientRect();
+                    // Active when header is near the top of viewport (offset 170px)
+                    if (rect.top - scrollContainerTop < 170) {
+                        activeIndex = i;
+                    } else {
+                        break;
+                    }
+                }
+                
+                tocItems.forEach((li, idx) => {
+                    if (idx === activeIndex) {
+                        li.classList.add('active');
+                    } else {
+                        li.classList.remove('active');
+                    }
+                });
+            };
+            
+            // Register scroll observer
+            docView.addEventListener('scroll', handleScrollSpy);
+            currentScrollSpyHandler = handleScrollSpy;
+            
+            // Trigger once initially to highlight the top section
+            handleScrollSpy();
+        }
 
         const tagsContainer = document.getElementById('info-tags');
         tagsContainer.innerHTML = '';
@@ -1100,6 +1175,13 @@ function resetView() {
         // Show Welcome View & Hide Document Content View
         document.getElementById('welcome-view').style.display = 'block';
         document.getElementById('doc-view').style.display = 'none';
+        
+        // Clear Scroll Spy Handler
+        const docView = document.getElementById('doc-view');
+        if (docView && currentScrollSpyHandler) {
+            docView.removeEventListener('scroll', currentScrollSpyHandler);
+            currentScrollSpyHandler = null;
+        }
         
         applyGraphVisualState();
         updateActiveDocItem(-1);
