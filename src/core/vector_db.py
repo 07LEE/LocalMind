@@ -110,16 +110,7 @@ class SimpleVectorDB:
         Returns:
             str: The normalized search query.
         """
-        if not query:
-            return query
-        synonyms = {
-            "아이작심": "Isaac Sim",
-            "아이작 심": "Isaac Sim"
-        }
-        normalized = query
-        for k, v in synonyms.items():
-            normalized = normalized.replace(k, v)
-        return normalized
+        return self.sparse_engine.dict_manager.preprocess_query(query)
 
     def search(self, query, top_k=3):
         """Searches the database for the most similar documents to the given query using vectorized operations.
@@ -147,13 +138,15 @@ class SimpleVectorDB:
         query = self._preprocess_query(query)
         return self.sparse_engine.search(query, self.documents, self.metadata, top_k=top_k)
 
-    def search_hybrid(self, query, top_k=3, k_factor=20):
-        """Combines Vector and BM25 search results using Reciprocal Rank Fusion (RRF).
+    def search_hybrid(self, query, top_k=3, k_factor=20, vector_weight=1.0, bm25_weight=1.0):
+        """Combines Vector and BM25 search results using Weighted Reciprocal Rank Fusion (RRF).
 
         Args:
             query (str): The search query text.
             top_k (int, optional): The number of top results to return. Defaults to 3.
             k_factor (int, optional): Smoothing factor for RRF calculation. Defaults to 20.
+            vector_weight (float, optional): Weight score multiplier for vector results. Defaults to 1.0.
+            bm25_weight (float, optional): Weight score multiplier for BM25 results. Defaults to 1.0.
 
         Returns:
             list[dict]: A list of combined and ranked results.
@@ -166,9 +159,9 @@ class SimpleVectorDB:
         # 2. Reciprocal Rank Fusion (RRF)
         rrf_scores = Counter()
         for rank, res in enumerate(vector_results, 1):
-            rrf_scores[res["index"]] += 1.0 / (k_factor + rank)
+            rrf_scores[res["index"]] += vector_weight / (k_factor + rank)
         for rank, res in enumerate(bm25_results, 1):
-            rrf_scores[res["index"]] += 1.0 / (k_factor + rank)
+            rrf_scores[res["index"]] += bm25_weight / (k_factor + rank)
             
         # 3. Combine and sort
         combined_results = []
