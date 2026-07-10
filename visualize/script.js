@@ -9,6 +9,7 @@ let isAutoOrbit = true;
 let orbitAngle = 0;
 let activeSubHighlight = null;
 let activeSearchIndices = null;
+let hoveredIndex = null;
 
 function getNodeTime(node) {
     if (node.metadata && node.metadata.date) {
@@ -60,18 +61,20 @@ async function applyGraphVisualState() {
         let baseOpacities = [];
         let baseSizes = [];
         
-        if (lastHighlightedIndex !== null) {
+        const activeFocusIndex = (hoveredIndex !== null) ? hoveredIndex : lastHighlightedIndex;
+        
+        if (activeFocusIndex !== null) {
             const connectedIndices = new Set();
             globalEdges.forEach(edge => {
                 const [sIdx, tIdx, score] = edge;
-                if (score >= currentThreshold && (sIdx === lastHighlightedIndex || tIdx === lastHighlightedIndex)) {
-                    const neighborIdx = (sIdx === lastHighlightedIndex ? tIdx : sIdx);
+                if (score >= currentThreshold && (sIdx === activeFocusIndex || tIdx === activeFocusIndex)) {
+                    const neighborIdx = (sIdx === activeFocusIndex ? tIdx : sIdx);
                     connectedIndices.add(neighborIdx);
                 }
             });
             
-            baseOpacities = globalNodes.map((n, i) => (i === lastHighlightedIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => (i === lastHighlightedIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
+            baseOpacities = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
+            baseSizes = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
         } else if (activeSubHighlight !== null) {
             const [cat, sub] = activeSubHighlight.split(' :: ');
             baseOpacities = globalNodes.map(n => {
@@ -108,11 +111,11 @@ async function applyGraphVisualState() {
         let edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
         let edgeWidth = theme === 'light' ? 1.5 : 1;
         
-        if (lastHighlightedIndex !== null) {
+        if (activeFocusIndex !== null) {
             const hX = [], hY = [], hZ = [];
             globalEdges.forEach(edge => {
                 const [sIdx, tIdx, score] = edge;
-                if (score >= currentThreshold && (sIdx === lastHighlightedIndex || tIdx === lastHighlightedIndex)) {
+                if (score >= currentThreshold && (sIdx === activeFocusIndex || tIdx === activeFocusIndex)) {
                     const s = globalNodes[sIdx], t = globalNodes[tIdx];
                     if (s && t) {
                         hX.push(s.x, t.x, null); hY.push(s.y, t.y, null); hZ.push(s.z, t.z, null);
@@ -242,13 +245,15 @@ function updatePlotlyTheme(theme) {
     const nodeLineColor = theme === 'light' ? 'rgba(36, 41, 47, 0.4)' : 'rgba(201, 209, 217, 0.1)';
     const kwEdgeColor = theme === 'light' ? 'rgba(167, 139, 250, 0.3)' : 'rgba(167, 139, 250, 0.08)';
     
+    const activeFocusIndex = (hoveredIndex !== null) ? hoveredIndex : lastHighlightedIndex;
+    
     Plotly.restyle('plot', {
-        'line.color': lastHighlightedIndex !== null ? (globalNodes[lastHighlightedIndex].is_keyword ? 'rgba(88, 166, 255, 0.15)' : 'rgba(58, 166, 255, 0.8)') : edgeColor,
+        'line.color': activeFocusIndex !== null ? (globalNodes[activeFocusIndex].is_keyword ? 'rgba(88, 166, 255, 0.15)' : 'rgba(58, 166, 255, 0.8)') : edgeColor,
         'marker.line.color': nodeLineColor
     }, [0, 1]).catch(() => {});
 
     Plotly.restyle('plot', {
-        'line.color': lastHighlightedIndex !== null ? (globalNodes[lastHighlightedIndex].is_keyword ? 'rgba(167, 139, 250, 0.8)' : 'rgba(167, 139, 250, 0.6)') : kwEdgeColor,
+        'line.color': activeFocusIndex !== null ? (globalNodes[activeFocusIndex].is_keyword ? 'rgba(167, 139, 250, 0.8)' : 'rgba(167, 139, 250, 0.6)') : kwEdgeColor,
     }, [2]).catch(() => {});
 }
 
@@ -486,6 +491,16 @@ async function init() {
                     docItem.addEventListener('click', (e) => {
                         e.stopPropagation();
                         highlightNode(index);
+                    });
+                    docItem.addEventListener('mouseenter', () => {
+                        if (isUpdating) return;
+                        hoveredIndex = index;
+                        applyGraphVisualState();
+                    });
+                    docItem.addEventListener('mouseleave', () => {
+                        if (isUpdating) return;
+                        hoveredIndex = null;
+                        applyGraphVisualState();
                     });
                     docContainer.appendChild(docItem);
                 });
