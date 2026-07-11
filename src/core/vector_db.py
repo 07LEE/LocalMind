@@ -104,6 +104,44 @@ class SimpleVectorDB:
         self.file_hashes.pop(filename, None)
         return removed_count
 
+    def remove_by_filenames(self, filenames):
+        """Removes all entries associated with a set of source filenames.
+
+        Args:
+            filenames: An iterable of source filenames to remove.
+
+        Returns:
+            The number of entries removed.
+        """
+        filenames_set = set(filenames)
+        indices_to_keep = [
+            i for i, m in enumerate(self.metadata) 
+            if m.get("rel_path", m.get("filename")) not in filenames_set
+        ]
+        removed_count = len(self.documents) - len(indices_to_keep)
+
+        if removed_count == 0:
+            return 0
+
+        # Update common data
+        self.documents = [self.documents[i] for i in indices_to_keep]
+        self.metadata = [self.metadata[i] for i in indices_to_keep]
+        
+        # Update Dense Engine vectors
+        all_vectors = self.dense_engine.get_vectors()
+        if all_vectors is not None and len(indices_to_keep) > 0:
+            self.dense_engine.set_vectors(all_vectors[indices_to_keep])
+        else:
+            self.dense_engine.set_vectors(None)
+
+        # Update Sparse Engine index
+        self.sparse_engine.rebuild(self.documents)
+
+        # Update file hashes cache
+        for filename in filenames_set:
+            self.file_hashes.pop(filename, None)
+        return removed_count
+
     def _preprocess_query(self, query):
         """Preprocesses the user query by replacing Korean phonetic transliterations with standard English terms.
 

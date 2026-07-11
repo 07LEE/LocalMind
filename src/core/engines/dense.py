@@ -64,6 +64,7 @@ class DenseIndex:
         if torch.cuda.is_available():
             try:
                 res = faiss.StandardGpuResources()
+                res.setTempMemory(64 * 1024 * 1024)
                 self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
             except Exception as e:
                 print(f"LOGE: [DenseIndex] Failed to convert FAISS index to GPU: {e}")
