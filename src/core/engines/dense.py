@@ -32,17 +32,18 @@ class DenseIndex:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self.model = SentenceTransformer(self.model_name, device=device)
 
-    def embed(self, texts):
+    def embed(self, texts, batch_size=32):
         """Calculates normalized embeddings for a list of texts.
 
         Args:
             texts (list[str]): List of texts to embed.
+            batch_size (int, optional): Number of texts to process in parallel. Defaults to 32.
 
         Returns:
             np.ndarray: Normalized embedding vectors of shape (n_texts, dimension).
         """
         self._load_model()
-        embeddings = self.model.encode(texts)
+        embeddings = self.model.encode(texts, batch_size=batch_size, show_progress_bar=False)
         # L2 Normalization for cosine similarity
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings / (norms + 1e-10)

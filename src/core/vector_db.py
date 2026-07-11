@@ -43,17 +43,18 @@ class SimpleVectorDB:
             self.reranker = CrossEncoder(self.rerank_model_name, device=device)
         print(f"LOGE: [VectorDB] All models loaded.")
 
-    def add_texts(self, texts, metadatas=None):
+    def add_texts(self, texts, metadatas=None, batch_size=32):
         """Calculates embeddings for a list of texts, normalizes them, and adds them to the database.
 
         Args:
             texts (list[str]): A list of string texts to embed and add.
             metadatas (list[dict], optional): A list of metadata dictionaries corresponding to the texts.
+            batch_size (int, optional): Batch size for parallel embedding calculation. Defaults to 32.
         """
         print(f"LOGE: [VectorDB] Processing {len(texts)} texts...")
         
         # 1. Update Dense (Vector) Engine
-        new_vectors = self.dense_engine.embed(texts)
+        new_vectors = self.dense_engine.embed(texts, batch_size=batch_size)
         self.dense_engine.add_vectors(new_vectors)
 
         # 2. Update Common Data
