@@ -4,7 +4,9 @@ import warnings
 import logging
 import numpy as np
 from collections import Counter
+from .config import EMBEDDING_MODEL, RERANK_MODEL
 from sentence_transformers import CrossEncoder
+import torch
 
 # Hide internal warning messages
 warnings.filterwarnings("ignore")
@@ -12,8 +14,6 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
-
-from .config import EMBEDDING_MODEL, RERANK_MODEL
 from .engines import SparseIndex, DenseIndex
 
 class SimpleVectorDB:
@@ -35,22 +35,26 @@ class SimpleVectorDB:
     def pre_load_models(self):
         """Pre-loads the embedding and re-ranking models into memory."""
         print(f"LOGE: [VectorDB] Pre-loading models...")
-        # Dense engine already initializes its model in its constructor
+        # Force load dense embedding model
+        self.dense_engine._load_model()
+        # Force load reranker
         if self.reranker is None:
-            self.reranker = CrossEncoder(self.rerank_model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.reranker = CrossEncoder(self.rerank_model_name, device=device)
         print(f"LOGE: [VectorDB] All models loaded.")
 
-    def add_texts(self, texts, metadatas=None):
+    def add_texts(self, texts, metadatas=None, batch_size=32):
         """Calculates embeddings for a list of texts, normalizes them, and adds them to the database.
 
         Args:
             texts (list[str]): A list of string texts to embed and add.
             metadatas (list[dict], optional): A list of metadata dictionaries corresponding to the texts.
+            batch_size (int, optional): Batch size for parallel embedding calculation. Defaults to 32.
         """
         print(f"LOGE: [VectorDB] Processing {len(texts)} texts...")
         
         # 1. Update Dense (Vector) Engine
-        new_vectors = self.dense_engine.embed(texts)
+        new_vectors = self.dense_engine.embed(texts, batch_size=batch_size)
         self.dense_engine.add_vectors(new_vectors)
 
         # 2. Update Common Data
@@ -109,16 +113,7 @@ class SimpleVectorDB:
         Returns:
             str: The normalized search query.
         """
-        if not query:
-            return query
-        synonyms = {
-            "아이작심": "Isaac Sim",
-            "아이작 심": "Isaac Sim"
-        }
-        normalized = query
-        for k, v in synonyms.items():
-            normalized = normalized.replace(k, v)
-        return normalized
+        return self.sparse_engine.dict_manager.preprocess_query(query)
 
     def search(self, query, top_k=3):
         """Searches the database for the most similar documents to the given query using vectorized operations.
@@ -146,13 +141,15 @@ class SimpleVectorDB:
         query = self._preprocess_query(query)
         return self.sparse_engine.search(query, self.documents, self.metadata, top_k=top_k)
 
-    def search_hybrid(self, query, top_k=3, k_factor=20):
-        """Combines Vector and BM25 search results using Reciprocal Rank Fusion (RRF).
+    def search_hybrid(self, query, top_k=3, k_factor=20, vector_weight=1.0, bm25_weight=1.0):
+        """Combines Vector and BM25 search results using Weighted Reciprocal Rank Fusion (RRF).
 
         Args:
             query (str): The search query text.
             top_k (int, optional): The number of top results to return. Defaults to 3.
             k_factor (int, optional): Smoothing factor for RRF calculation. Defaults to 20.
+            vector_weight (float, optional): Weight score multiplier for vector results. Defaults to 1.0.
+            bm25_weight (float, optional): Weight score multiplier for BM25 results. Defaults to 1.0.
 
         Returns:
             list[dict]: A list of combined and ranked results.
@@ -165,9 +162,9 @@ class SimpleVectorDB:
         # 2. Reciprocal Rank Fusion (RRF)
         rrf_scores = Counter()
         for rank, res in enumerate(vector_results, 1):
-            rrf_scores[res["index"]] += 1.0 / (k_factor + rank)
+            rrf_scores[res["index"]] += vector_weight / (k_factor + rank)
         for rank, res in enumerate(bm25_results, 1):
-            rrf_scores[res["index"]] += 1.0 / (k_factor + rank)
+            rrf_scores[res["index"]] += bm25_weight / (k_factor + rank)
             
         # 3. Combine and sort
         combined_results = []
@@ -196,7 +193,8 @@ class SimpleVectorDB:
             return []
             
         if self.reranker is None:
-            self.reranker = CrossEncoder(self.rerank_model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.reranker = CrossEncoder(self.rerank_model_name, device=device)
             
         pairs = [[query, res["text"]] for res in results]
         rerank_scores = self.reranker.predict(pairs)

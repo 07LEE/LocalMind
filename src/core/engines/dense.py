@@ -1,5 +1,6 @@
 import numpy as np
 import faiss
+import torch
 from sentence_transformers import SentenceTransformer
 
 class DenseIndex:
@@ -20,20 +21,29 @@ class DenseIndex:
         Args:
             model_name (str): Name or path of the sentence-transformer model.
         """
-        self.model = SentenceTransformer(model_name)
+        self.model_name = model_name
+        self.model = None
         self.vectors = None
         self.index = None
 
-    def embed(self, texts):
+    def _load_model(self):
+        """Initializes the sentence-transformer model lazily."""
+        if self.model is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.model = SentenceTransformer(self.model_name, device=device)
+
+    def embed(self, texts, batch_size=32):
         """Calculates normalized embeddings for a list of texts.
 
         Args:
             texts (list[str]): List of texts to embed.
+            batch_size (int, optional): Number of texts to process in parallel. Defaults to 32.
 
         Returns:
             np.ndarray: Normalized embedding vectors of shape (n_texts, dimension).
         """
-        embeddings = self.model.encode(texts)
+        self._load_model()
+        embeddings = self.model.encode(texts, batch_size=batch_size, show_progress_bar=False)
         # L2 Normalization for cosine similarity
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings / (norms + 1e-10)
@@ -50,7 +60,16 @@ class DenseIndex:
 
         dimension = self.vectors.shape[1]
         # Using IndexFlatIP (Inner Product) for cosine similarity on normalized vectors
-        self.index = faiss.IndexFlatIP(dimension)
+        cpu_index = faiss.IndexFlatIP(dimension)
+        if torch.cuda.is_available():
+            try:
+                res = faiss.StandardGpuResources()
+                self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
+            except Exception as e:
+                print(f"LOGE: [DenseIndex] Failed to convert FAISS index to GPU: {e}")
+                self.index = cpu_index
+        else:
+            self.index = cpu_index
         self.index.add(self.vectors.astype('float32'))
 
     def add_vectors(self, new_vectors):
@@ -81,6 +100,7 @@ class DenseIndex:
         if self.index is None or len(documents) == 0:
             return []
 
+        self._load_model()
         # 1. Encode and normalize query
         query_vector = self.model.encode(query).reshape(1, -1).astype('float32')
         faiss.normalize_L2(query_vector)

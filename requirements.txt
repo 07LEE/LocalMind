@@ -1,7 +1,7 @@
 sentence-transformers
 numpy
 PyYAML
-faiss-cpu
+faiss-gpu
 flask
 flask-cors
 kiwipiepy

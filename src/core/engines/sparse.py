@@ -2,6 +2,7 @@ import re
 import os
 import math
 import numpy as np
+import torch
 from collections import Counter
 from kiwipiepy import Kiwi
 from personal_dict.manager import DictionaryManager
@@ -30,6 +31,12 @@ class SparseIndex:
         self.doc_lengths = []  # Length of each document
         self.k1 = 1.5
         self.b = 0.75
+        
+        # Determine computing device
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.tf_tensors = {}
+        self.idf_tensors = {}
+        self.doc_lengths_tensor = None
         
         # Initialize Kiwi with Custom Dictionary Manager
         self.dict_manager = DictionaryManager()
@@ -74,6 +81,9 @@ class SparseIndex:
             self.idf = {}
             self.avgdl = 0
             self.doc_lengths = []
+            self.tf_tensors = {}
+            self.idf_tensors = {}
+            self.doc_lengths_tensor = None
             return
 
         doc_tokens = [self._tokenize(doc) for doc in documents]
@@ -83,18 +93,31 @@ class SparseIndex:
         # Calculate TF
         self.tf = [Counter(tokens) for tokens in doc_tokens]
         
-        # Calculate IDF
+        # Pre-build TF vector arrays for tensor execution
         num_docs = len(documents)
+        tf_arrays = {}
+        for i, counter in enumerate(self.tf):
+            for term, val in counter.items():
+                if term not in tf_arrays:
+                    tf_arrays[term] = np.zeros(num_docs, dtype=np.float32)
+                tf_arrays[term][i] = val
+        
+        self.tf_tensors = {term: torch.tensor(arr, device=self.device) for term, arr in tf_arrays.items()}
+        self.doc_lengths_tensor = torch.tensor(self.doc_lengths, device=self.device, dtype=torch.float32)
+
+        # Calculate IDF
         all_terms = set()
         for counter in self.tf:
             all_terms.update(counter.keys())
             
         self.idf = {}
+        self.idf_tensors = {}
         for term in all_terms:
             # Number of documents containing the term
             doc_freq = sum(1 for counter in self.tf if term in counter)
             # Standard BM25 IDF formula
             self.idf[term] = math.log((num_docs - doc_freq + 0.5) / (doc_freq + 0.5) + 1.0)
+            self.idf_tensors[term] = torch.tensor(self.idf[term], device=self.device, dtype=torch.float32)
 
     def search(self, query, documents, metadata, top_k=3):
         """Calculates BM25 scores for the query and returns ranked results.
@@ -112,32 +135,34 @@ class SparseIndex:
             return []
 
         query_tokens = self._tokenize(query)
-        scores = np.zeros(len(self.tf))
+        scores = torch.zeros(len(self.tf), device=self.device, dtype=torch.float32)
         
         for term in query_tokens:
-            if term not in self.idf:
+            if term not in self.idf_tensors:
                 continue
             
-            idf_val = self.idf[term]
-            for i, counter in enumerate(self.tf):
-                tf_val = counter[term]
-                # BM25 scoring formula
-                numerator = tf_val * (self.k1 + 1)
-                denominator = tf_val + self.k1 * (1 - self.b + self.b * self.doc_lengths[i] / self.avgdl)
-                scores[i] += idf_val * (numerator / denominator)
+            idf_val = self.idf_tensors[term]
+            tf_val = self.tf_tensors[term]
+            
+            # BM25 scoring formula
+            numerator = tf_val * (self.k1 + 1)
+            denominator = tf_val + self.k1 * (1 - self.b + self.b * self.doc_lengths_tensor / self.avgdl)
+            scores += idf_val * (numerator / denominator)
+
+        scores_np = scores.cpu().numpy()
 
         # Handle cases where all scores might be 0
-        if np.all(scores == 0):
+        if np.all(scores_np == 0):
             return []
 
         # Rank and filter
-        top_k_indices = scores.argsort()[::-1][:top_k]
+        top_k_indices = scores_np.argsort()[::-1][:top_k]
         
         results = []
         for idx in top_k_indices:
-            if scores[idx] <= 0: continue
+            if scores_np[idx] <= 0: continue
             results.append({
-                "score": float(scores[idx]),
+                "score": float(scores_np[idx]),
                 "text": documents[idx],
                 "metadata": metadata[idx],
                 "index": int(idx),

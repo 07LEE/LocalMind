@@ -4,6 +4,8 @@ import os
 import colorsys
 import numpy as np
 import umap
+import re
+from collections import Counter
 
 # Path configuration
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -245,7 +247,7 @@ def extract_visualization_data():
     output_data = {
         "nodes": nodes,
         "edges": edges,
-        "intra_file_edges": [], 
+        "intra_file_edges": [],
         "categories": cat_to_color
     }
 
