@@ -59,7 +59,16 @@ class DenseIndex:
 
         dimension = self.vectors.shape[1]
         # Using IndexFlatIP (Inner Product) for cosine similarity on normalized vectors
-        self.index = faiss.IndexFlatIP(dimension)
+        cpu_index = faiss.IndexFlatIP(dimension)
+        if torch.cuda.is_available():
+            try:
+                res = faiss.StandardGpuResources()
+                self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
+            except Exception as e:
+                print(f"LOGE: [DenseIndex] Failed to convert FAISS index to GPU: {e}")
+                self.index = cpu_index
+        else:
+            self.index = cpu_index
         self.index.add(self.vectors.astype('float32'))
 
     def add_vectors(self, new_vectors):
