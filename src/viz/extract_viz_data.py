@@ -66,8 +66,27 @@ def extract_visualization_data():
         file_metadata.append(metadata[indices[0]])
         
         # 3. Combine text for the whole file
-        # Prioritize display_text from metadata (which contains code blocks)
-        full_text = "\n\n".join([metadata[i].get("display_text", documents[i]) for i in indices])
+        # Read directly from the source file to preserve the exact original layout and prevent sliding window duplicate paragraphs
+        full_text = ""
+        rep_meta = metadata[indices[0]]
+        source_path = rep_meta.get("source_path")
+        if source_path and os.path.exists(source_path):
+            try:
+                with open(source_path, "r", encoding="utf-8") as sf:
+                    content = sf.read()
+                # Strip YAML frontmatter
+                frontmatter_match = re.match(r"^---\n(.*?)\n---\n(.*)", content, flags=re.DOTALL)
+                if frontmatter_match:
+                    full_text = frontmatter_match.group(2).strip()
+                else:
+                    full_text = content.strip()
+            except Exception as e:
+                print(f"Warning: Failed to read original source path {source_path}: {e}")
+        
+        if not full_text:
+            # Fallback to joining chunks if file read fails
+            full_text = "\n\n".join([metadata[i].get("display_text", documents[i]) for i in indices])
+            
         file_texts.append(full_text)
         
     file_vectors = np.array(file_vectors)
