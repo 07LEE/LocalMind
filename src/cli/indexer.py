@@ -6,6 +6,7 @@ import concurrent.futures
 from functools import partial
 import yaml
 from core.vector_db import SimpleVectorDB
+from core.config import MAX_CHUNK_SIZE, CHUNKING_OVERLAP
 
 
 def compute_file_hash(filepath):
@@ -27,52 +28,82 @@ GENERIC_HEADERS = {
 }
 
 
-def chunk_text(text, max_chunk_size=800):
-    """Splits text semantically by paragraphs while preserving markdown heading context.
+def chunk_text(text, max_chunk_size=MAX_CHUNK_SIZE, overlap_size=CHUNKING_OVERLAP):
+    """Splits text by paragraphs using a sliding window with overlap while preserving heading context.
 
     Args:
         text (str): The raw input markdown text.
         max_chunk_size (int): The maximum number of characters per chunk.
+        overlap_size (int): The number of characters to overlap between adjacent chunks.
 
     Returns:
         list[str]: A list of valid, context-aware text chunks.
     """
     paragraphs = text.split('\n\n')
     valid_chunks = []
+    paragraph_headings = []
     current_heading = ""
-    current_chunk = ""
+    clean_paragraphs = []
 
+    # 1. First pass: clean paragraphs and assign current headings
     for paragraph in paragraphs:
         p_stripped = paragraph.strip()
         if not p_stripped:
             continue
-            
-        # Update context if a heading is found. 
-        # Clean stylistic noise like English translations in parentheses: "Header (English)" -> "Header"
+
         if p_stripped.startswith('#'):
             raw_heading = p_stripped.split('\n')[0]
-            # Remove markdown hash symbols for clean context
             clean_heading = re.sub(r'^#+\s*', '', raw_heading)
-            # Remove stylistic noise (English pairing)
             clean_heading = re.sub(r'\s*\([^)]*\)', '', clean_heading).strip()
-            
-            # If the heading is too generic, do not use it as context to avoid semantic noise
             if clean_heading.lower() in GENERIC_HEADERS:
                 current_heading = ""
             else:
                 current_heading = clean_heading
-            
-        # If adding the next paragraph breaches the max limit, flush the current chunk to the results
-        if len(current_chunk) + len(p_stripped) > max_chunk_size and current_chunk:
-            valid_chunks.append(current_chunk.strip())
-            current_chunk = f"[{current_heading}]\n\n" if current_heading else ""
-            
-        current_chunk += p_stripped + "\n\n"
-        
-    if current_chunk.strip():
-        valid_chunks.append(current_chunk.strip())
-        
-    # Remove fragments that are too short to hold standalone semantic meaning.
+
+        clean_paragraphs.append(p_stripped)
+        paragraph_headings.append(current_heading)
+
+    # 2. Second pass: sliding window over paragraphs
+    i = 0
+    num_paragraphs = len(clean_paragraphs)
+    while i < num_paragraphs:
+        chunk_paragraphs = []
+        chunk_len = 0
+        heading = paragraph_headings[i]
+
+        j = i
+        while j < num_paragraphs:
+            p = clean_paragraphs[j]
+            prefix = f"[{heading}]\n\n" if heading else ""
+            estimated_len = chunk_len + len(p) + len(prefix) + 2
+
+            if estimated_len > max_chunk_size and chunk_paragraphs:
+                break
+
+            chunk_paragraphs.append(p)
+            chunk_len += len(p) + 2
+            j += 1
+
+        prefix = f"[{heading}]\n\n" if heading else ""
+        chunk_text_content = prefix + "\n\n".join(chunk_paragraphs)
+        valid_chunks.append(chunk_text_content.strip())
+
+        if j == num_paragraphs:
+            break
+
+        # Backtrack to find overlap start
+        overlap_len = 0
+        k = j - 1
+        while k >= i:
+            overlap_len += len(clean_paragraphs[k]) + 2
+            if overlap_len > overlap_size:
+                break
+            k -= 1
+
+        # Ensure index progress to prevent infinite loop
+        next_i = max(k + 1, i + 1)
+        i = next_i
+
     return [chunk for chunk in valid_chunks if len(chunk) > 20]
 
 

@@ -1,5 +1,7 @@
 import os
 import sys
+import threading
+import subprocess
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 
@@ -21,7 +23,49 @@ db = SimpleVectorDB()
 if os.path.exists(DB_DEFAULT_PATH):
     db.load(DB_DEFAULT_PATH)
 
+# Global states for asynchronous background sync
+sync_lock = threading.Lock()
+sync_status = "idle"  # States: "idle", "processing", "error: <msg>"
+
 # Models will be lazy-loaded on the first search request
+
+def _run_sync_background():
+    global sync_status
+    try:
+        print("\nLOGE: [Server] Background sync started.")
+        # 1. Run Indexer
+        print("LOGE: [Server] Running indexer in background...")
+        index_markdown_files(POSTS_DIR, DB_DEFAULT_PATH)
+        
+        # 2. Run Visualization Data Extractor
+        print("LOGE: [Server] Running viz data extractor in background...")
+        extract_visualization_data()
+        
+        # 3. Run Keyword Scanner
+        print("LOGE: [Server] Running keyword scanner in background...")
+        cmd = [
+            sys.executable,
+            os.path.join(BASE_DIR, "src", "tools", "scan_keywords.py"),
+            "--dir", POSTS_DIR,
+            "--min", "5"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"LOGE: [Server] Keyword scanner failed: {result.stderr}")
+        else:
+            print("LOGE: [Server] Keyword scanner completed successfully.")
+        
+        # 4. Reload Database to sync memory with disk
+        print("LOGE: [Server] Reloading database in background...")
+        db.load(DB_DEFAULT_PATH)
+        
+        with sync_lock:
+            sync_status = "idle"
+        print("LOGE: [Server] Background sync completed successfully.")
+    except Exception as e:
+        print(f"LOGE: [Server] Background sync error: {e}")
+        with sync_lock:
+            sync_status = f"error: {str(e)}"
 
 @app.after_request
 def add_header(response):
@@ -53,35 +97,40 @@ def serve_visualize(path):
 
 @app.route('/api/sync', methods=['POST'])
 def sync_db():
-    """API endpoint to trigger manual re-indexing and data extraction."""
+    """API endpoint to trigger asynchronous manual re-indexing and data extraction."""
+    global sync_status
     try:
-        print("\nLOGE: [Server] Received sync request.")
-        # 1. Run Indexer
-        print("LOGE: [Server] Running indexer...")
-        index_markdown_files(POSTS_DIR, DB_DEFAULT_PATH)
-        
-        # 2. Run Visualization Data Extractor
-        print("LOGE: [Server] Running viz data extractor...")
-        extract_visualization_data()
-        
-        # 3. Run Keyword Scanner
-        print("LOGE: [Server] Running keyword scanner...")
-        scan_posts(POSTS_DIR, min_count=5)
-        
-        # 4. Reload Database to sync memory with disk
-        print("LOGE: [Server] Reloading database...")
-        db.load(DB_DEFAULT_PATH)
-        
+        with sync_lock:
+            if sync_status == "processing":
+                return jsonify({
+                    "status": "error",
+                    "message": "Sync is already in progress."
+                }), 409
+            sync_status = "processing"
+
+        # Spawn background thread
+        thread = threading.Thread(target=_run_sync_background)
+        thread.daemon = True
+        thread.start()
+
         return jsonify({
-            "status": "success", 
-            "message": "Database and visualization data updated successfully."
+            "status": "processing",
+            "message": "Database sync started in the background."
         })
     except Exception as e:
-        print(f"LOGE: [Server] Sync error: {e}")
+        print(f"LOGE: [Server] Sync initiation error: {e}")
         return jsonify({
-            "status": "error", 
+            "status": "error",
             "message": str(e)
         }), 500
+
+@app.route('/api/sync/status', methods=['GET'])
+def sync_db_status():
+    """API endpoint to query current background sync status."""
+    global sync_status
+    return jsonify({
+        "status": sync_status
+    })
 
 @app.route('/api/search', methods=['GET'])
 def search():

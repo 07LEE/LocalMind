@@ -60,9 +60,9 @@ async function applyGraphVisualState() {
     try {
         let baseOpacities = [];
         let baseSizes = [];
-        
+
         const activeFocusIndex = (hoveredIndex !== null) ? hoveredIndex : lastHighlightedIndex;
-        
+
         if (activeFocusIndex !== null) {
             const connectedIndices = new Set();
             globalEdges.forEach(edge => {
@@ -72,7 +72,7 @@ async function applyGraphVisualState() {
                     connectedIndices.add(neighborIdx);
                 }
             });
-            
+
             baseOpacities = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
             baseSizes = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
         } else if (activeSubHighlight !== null) {
@@ -91,7 +91,7 @@ async function applyGraphVisualState() {
             baseOpacities = globalNodes.map(() => 0.9);
             baseSizes = globalNodes.map(n => n.size);
         }
-        
+
         const edgeX = [], edgeY = [], edgeZ = [];
         globalEdges.forEach(edge => {
             const [sourceIdx, targetIdx, score] = edge;
@@ -102,15 +102,15 @@ async function applyGraphVisualState() {
                 }
             }
         });
-        
+
         let finalEdgeX = edgeX;
         let finalEdgeY = edgeY;
         let finalEdgeZ = edgeZ;
-        
+
         const theme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
         let edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
         let edgeWidth = theme === 'light' ? 1.5 : 1;
-        
+
         if (activeFocusIndex !== null) {
             const hX = [], hY = [], hZ = [];
             globalEdges.forEach(edge => {
@@ -163,12 +163,12 @@ async function applyGraphVisualState() {
             finalEdgeY = hY.length ? hY : [null];
             finalEdgeZ = hZ.length ? hZ : [null];
         }
-        
+
         await Plotly.restyle('plot', {
             'marker.opacity': [baseOpacities],
             'marker.size': [baseSizes]
         }, [1]);
-        
+
         await Plotly.restyle('plot', {
             'x': [finalEdgeX],
             'y': [finalEdgeY],
@@ -189,11 +189,11 @@ function hexToHls(hex) {
     let r = parseInt(hex.substring(0, 2), 16) / 255;
     let g = parseInt(hex.substring(2, 4), 16) / 255;
     let b = parseInt(hex.substring(4, 6), 16) / 255;
-    
+
     let max = Math.max(r, g, b), min = Math.min(r, g, b);
     let h, l, s;
     l = (max + min) / 2;
-    
+
     if (max === min) {
         h = s = 0;
     } else {
@@ -217,16 +217,16 @@ function hlsToHex(h, l, s) {
         const hue2rgb = (p, q, t) => {
             if (t < 0) t += 1;
             if (t > 1) t -= 1;
-            if (t < 1/6) return p + (q - p) * 6 * t;
-            if (t < 1/2) return q;
-            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
             return p;
         };
         let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
         let p = 2 * l - q;
-        r = hue2rgb(p, q, h + 1/3);
+        r = hue2rgb(p, q, h + 1 / 3);
         g = hue2rgb(p, q, h);
-        b = hue2rgb(p, q, h - 1/3);
+        b = hue2rgb(p, q, h - 1 / 3);
     }
     const toHex = x => {
         const hex = Math.round(x * 255).toString(16);
@@ -240,21 +240,21 @@ function hlsToHex(h, l, s) {
 // --- Theme Management ---
 function updatePlotlyTheme(theme) {
     if (!document.getElementById('plot')) return;
-    
+
     const edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
     const nodeLineColor = theme === 'light' ? 'rgba(36, 41, 47, 0.4)' : 'rgba(201, 209, 217, 0.1)';
     const kwEdgeColor = theme === 'light' ? 'rgba(167, 139, 250, 0.3)' : 'rgba(167, 139, 250, 0.08)';
-    
+
     const activeFocusIndex = (hoveredIndex !== null) ? hoveredIndex : lastHighlightedIndex;
-    
+
     Plotly.restyle('plot', {
         'line.color': activeFocusIndex !== null ? (globalNodes[activeFocusIndex].is_keyword ? 'rgba(88, 166, 255, 0.15)' : 'rgba(58, 166, 255, 0.8)') : edgeColor,
         'marker.line.color': nodeLineColor
-    }, [0, 1]).catch(() => {});
+    }, [0, 1]).catch(() => { });
 
     Plotly.restyle('plot', {
         'line.color': activeFocusIndex !== null ? (globalNodes[activeFocusIndex].is_keyword ? 'rgba(167, 139, 250, 0.8)' : 'rgba(167, 139, 250, 0.6)') : kwEdgeColor,
-    }, [2]).catch(() => {});
+    }, [2]).catch(() => { });
 }
 
 async function init() {
@@ -288,16 +288,16 @@ async function init() {
             hooks: {
                 postprocess(html) {
                     return html.replace(/<table>/g, '<div class="table-wrapper"><table>')
-                               .replace(/<\/table>/g, '</table></div>');
+                        .replace(/<\/table>/g, '</table></div>');
                 }
             }
         });
 
-        marked.setOptions({ 
-            gfm: true, 
-            breaks: true, 
-            headerIds: false, 
-            mangle: false 
+        marked.setOptions({
+            gfm: true,
+            breaks: true,
+            headerIds: false,
+            mangle: false
         });
         const response = await fetch('/data/viz-data.json');
         const data = await response.json();
@@ -317,7 +317,7 @@ async function init() {
             let category = 'General';
             let subcategory = 'General';
             let rootSub = 'General';
-            
+
             if (parts.length > 1) {
                 category = parts[0];
                 if (parts.length > 2) {
@@ -393,7 +393,7 @@ async function init() {
             if (node.is_keyword) return;
             const category = node.category;
             const subcategory = node.subcategory;
-            
+
             if (!db[category]) {
                 db[category] = {};
             }
@@ -401,7 +401,7 @@ async function init() {
                 db[category][subcategory] = [];
             }
             db[category][subcategory].push({ node, index: nodeIdx });
-            
+
             if (!catToColor[category]) {
                 catToColor[category] = node.color || "#cccccc";
             }
@@ -508,16 +508,16 @@ async function init() {
                 const highlightKey = `${category} :: ${sub}`;
 
                 // 1. Right area click: Toggle accordion open/close only, do not change graph highlight
-                rightArea.addEventListener('click', function(e) {
+                rightArea.addEventListener('click', function (e) {
                     e.stopPropagation();
                     const isActive = group.classList.toggle('active');
                     arrow.textContent = isActive ? '▼' : '▶';
                 });
 
                 // 2. Left area click: Toggle graph highlight only, do not close/open accordion
-                leftArea.addEventListener('click', function(e) {
+                leftArea.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    
+
                     if (activeSubHighlight === highlightKey) {
                         activeSubHighlight = null;
                     } else {
@@ -602,10 +602,10 @@ async function init() {
         let searchTimeout;
 
         if (searchInput && searchResults) {
-            searchInput.addEventListener('input', function() {
+            searchInput.addEventListener('input', function () {
                 clearTimeout(searchTimeout);
                 const query = this.value.trim();
-                
+
                 if (!query) {
                     searchResults.classList.remove('active');
                     searchResults.innerHTML = '';
@@ -617,7 +617,7 @@ async function init() {
                     try {
                         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
                         const data = await response.json();
-                        
+
                         if (data.status === 'success' && data.results.length > 0) {
                             displaySearchResults(data.results);
                         } else {
@@ -633,10 +633,10 @@ async function init() {
             function displaySearchResults(results) {
                 searchResults.innerHTML = '';
                 searchResults.classList.add('active');
-                
+
                 const resultPaths = new Set(results.map(res => res.metadata.rel_path));
                 const resultIndices = new Set();
-                
+
                 globalNodes.forEach((node, i) => {
                     if (resultPaths.has(node.metadata.rel_path)) {
                         resultIndices.add(i);
@@ -646,11 +646,11 @@ async function init() {
                 results.forEach(res => {
                     const item = document.createElement('div');
                     item.className = 'search-result-item';
-                    
+
                     const meta = res.metadata;
                     const score = res.rerank_score || res.score;
                     const title = meta.title || meta.filename;
-                    
+
                     item.innerHTML = `
                         <div class="result-title">${title}</div>
                         <div class="result-snippet">${res.text}</div>
@@ -658,7 +658,7 @@ async function init() {
                             <div class="result-score">Similarity: ${score.toFixed(4)}</div>
                         </div>
                     `;
-                    
+
                     item.onclick = () => {
                         const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
                         if (nodeIndex !== -1) {
@@ -668,7 +668,7 @@ async function init() {
                             alert('Graph에서 해당 문서를 찾을 수 없습니다.');
                         }
                     };
-                    
+
                     searchResults.appendChild(item);
                 });
 
@@ -687,20 +687,20 @@ async function init() {
 
         const thresholdSlider = document.getElementById('threshold-slider');
         const thresholdVal = document.getElementById('threshold-val');
-        
-        thresholdSlider.addEventListener('input', function() {
+
+        thresholdSlider.addEventListener('input', function () {
             currentThreshold = parseFloat(this.value);
             thresholdVal.textContent = currentThreshold.toFixed(2);
             applyGraphVisualState();
         });
 
         const plotDiv = document.getElementById('plot');
-        
+
         // --- Auto-Orbit Logic ---
         const orbitToggle = document.getElementById('orbit-toggle');
         let isUserInteracting = false;
 
-        orbitToggle.addEventListener('change', function() {
+        orbitToggle.addEventListener('change', function () {
             isAutoOrbit = this.checked;
             if (isAutoOrbit) requestAnimationFrame(animate);
         });
@@ -716,7 +716,7 @@ async function init() {
             wheelTimer = setTimeout(() => { wheelActive = false; }, 150);
         }, { passive: true });
 
-        plotDiv.on('plotly_relayout', function(eventData) {
+        plotDiv.on('plotly_relayout', function (eventData) {
             const eye = eventData['scene.camera.eye'] || (eventData['scene.camera'] && eventData['scene.camera'].eye);
             if (eye) {
                 orbitAngle = Math.atan2(eye.y, eye.x);
@@ -729,9 +729,9 @@ async function init() {
                 if (isAutoOrbit) requestAnimationFrame(animate);
                 return;
             }
-            
+
             frameCount++;
-            const throttle = wheelActive ? 5 : 2; 
+            const throttle = wheelActive ? 5 : 2;
             if (frameCount % throttle !== 0) {
                 requestAnimationFrame(animate);
                 return;
@@ -745,31 +745,31 @@ async function init() {
 
             const currentEye = currentLayout.scene.camera.eye;
             const radius = Math.sqrt(currentEye.x ** 2 + currentEye.y ** 2);
-            
+
             orbitAngle += wheelActive ? 0.001 : 0.004;
-            
+
             const x = radius * Math.cos(orbitAngle);
             const y = radius * Math.sin(orbitAngle);
-            
+
             try {
                 await Plotly.relayout('plot', {
                     'scene.camera.eye': { x: x, y: y, z: currentEye.z }
                 });
-            } catch (err) {}
-            
+            } catch (err) { }
+
             if (isAutoOrbit) requestAnimationFrame(animate);
         }
 
         setTimeout(() => { if (isAutoOrbit) requestAnimationFrame(animate); }, 1000);
 
         let plotlyClickFired = false;
-        plotDiv.on('plotly_click', function(eventData) {
+        plotDiv.on('plotly_click', function (eventData) {
             plotlyClickFired = true;
             if (isUpdating) return;
             if (!eventData || !eventData.points || eventData.points.length === 0) { resetView(); return; }
             const p = eventData.points[0];
             if (p.fullData.mode !== 'markers') { resetView(); return; }
-            
+
             // CurveNumber 1 is nodeTrace
             if (p.curveNumber === 1 && p.pointNumber !== undefined) {
                 selectGraphNode(p.pointNumber);
@@ -779,7 +779,7 @@ async function init() {
         });
 
         // Plotly 3D does not fire plotly_click on empty space, so use native click
-        plotDiv.addEventListener('click', function() {
+        plotDiv.addEventListener('click', function () {
             setTimeout(() => {
                 if (!plotlyClickFired && lastHighlightedIndex !== null) {
                     resetView();
@@ -801,22 +801,47 @@ async function init() {
             syncBtn.disabled = true;
             syncBtn.classList.add('loading');
             syncBtn.innerHTML = 'Syncing...';
-            
+
+            const resetSyncButton = () => {
+                syncBtn.disabled = false;
+                syncBtn.classList.remove('loading');
+                syncBtn.innerHTML = 'Sync';
+            };
+
             try {
                 const res = await fetch('/api/sync', { method: 'POST' });
                 const result = await res.json();
-                if (result.status === 'success') {
+
+                if (result.status === 'processing') {
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusRes = await fetch('/api/sync/status');
+                            const statusData = await statusRes.json();
+                            if (statusData.status === 'idle') {
+                                clearInterval(pollInterval);
+                                location.reload();
+                            } else if (statusData.status.startsWith('error')) {
+                                clearInterval(pollInterval);
+                                alert('Sync failed: ' + statusData.status);
+                                resetSyncButton();
+                            }
+                        } catch (pollErr) {
+                            console.error('Polling error:', pollErr);
+                            clearInterval(pollInterval);
+                            alert('An error occurred during sync monitoring.');
+                            resetSyncButton();
+                        }
+                    }, 2000);
+                } else if (result.status === 'success') {
                     location.reload();
                 } else {
                     alert('Sync failed: ' + result.message);
+                    resetSyncButton();
                 }
             } catch (err) {
                 console.error('Sync Error:', err);
                 alert('An error occurred during sync.');
-            } finally {
-                syncBtn.disabled = false;
-                syncBtn.classList.remove('loading');
-                syncBtn.innerHTML = 'Sync';
+                resetSyncButton();
             }
         });
 
@@ -832,7 +857,7 @@ async function highlightNode(index) {
     try {
         const item = globalNodes[index];
         if (!item) return;
-        
+
         let mathBlocks = [];
 
         if (item.is_keyword) {
@@ -840,7 +865,7 @@ async function highlightNode(index) {
             document.getElementById('info-path').textContent = "Keyword";
             document.getElementById('info-created').textContent = '-';
             document.getElementById('info-modified').textContent = '-';
-            
+
             const connectedDocs = [];
             globalKeywordEdges.forEach(edge => {
                 const [dIdx, kIdx] = edge;
@@ -852,12 +877,12 @@ async function highlightNode(index) {
 
             const docListHtml = connectedDocs.map(d => `- ${d.metadata.title || d.metadata.filename}`).join('\n');
             const cleanExplanation = `### 키워드: ${item.metadata.title}\n\n이 단어는 다음 ${connectedDocs.length}개의 문서에서 빈번하게 등장하거나 중요 태그로 지정되어 있습니다. 아래 목록이나 그래프에서 연관된 문서를 클릭하여 지식 간의 흐름을 확인해 보세요.\n\n${docListHtml}`;
-            
+
             const renderedHtml = marked.parse(cleanExplanation);
             document.getElementById('info-content').innerHTML = renderedHtml;
             document.getElementById('info-tags').innerHTML = '';
             document.getElementById('toc-sidebar').style.display = 'none';
-            
+
             const relatedList = document.getElementById('related-list');
             relatedList.innerHTML = '';
             connectedDocs.forEach(doc => {
@@ -872,10 +897,10 @@ async function highlightNode(index) {
                 };
                 relatedList.appendChild(relEl);
             });
-            
+
             applyGraphVisualState();
             updateActiveDocItem(-1);
-            
+
             document.getElementById('welcome-view').style.display = 'none';
             document.getElementById('doc-view').style.display = 'block';
             document.querySelector('.main-content').scrollTop = 0;
@@ -905,11 +930,11 @@ async function highlightNode(index) {
             modifiedStr = formatDate(item.mtime * 1000);
         }
         document.getElementById('info-modified').textContent = modifiedStr;
-        
+
         let processedContent = item.text;
         const docPath = item.metadata.rel_path;
         const docDir = docPath.substring(0, docPath.lastIndexOf('/') + 1);
-        
+
         processedContent = processedContent.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
             if (src.startsWith('http') || src.startsWith('/')) return match;
             let fullSrc = "/posts/" + docDir + src;
@@ -950,27 +975,27 @@ async function highlightNode(index) {
         mathBlocks.forEach((math, idx) => {
             const displayId = `@@MATH_DISPLAY${idx}@@`;
             const inlineId = `@@MATH_INLINE${idx}@@`;
-            
+
             if (renderedHtml.includes(displayId)) {
                 const cleanedMath = math.replace(/\$\$/g, '').replace(/\\\[|\\\]/g, '');
                 let katexHtml = cleanedMath;
                 try {
                     katexHtml = katex.renderToString(cleanedMath, { displayMode: true, throwOnError: false });
-                } catch (err) {}
+                } catch (err) { }
                 renderedHtml = renderedHtml.replace(displayId, katexHtml);
             } else if (renderedHtml.includes(inlineId)) {
                 const cleanedMath = math.replace(/\$/g, '').replace(/\\\(|\\\)/g, '');
                 let katexHtml = cleanedMath;
                 try {
                     katexHtml = katex.renderToString(cleanedMath, { displayMode: false, throwOnError: false });
-                } catch (err) {}
+                } catch (err) { }
                 renderedHtml = renderedHtml.replace(inlineId, katexHtml);
             }
         });
 
         const infoContentEl = document.getElementById('info-content');
         infoContentEl.innerHTML = renderedHtml;
-        
+
         renderMathInElement(infoContentEl, {
             delimiters: [
                 { left: '$$', right: '$$', display: true },
@@ -986,47 +1011,47 @@ async function highlightNode(index) {
         const tocList = document.getElementById('toc-list');
         const tocSidebar = document.getElementById('toc-sidebar');
         const docView = document.getElementById('doc-view');
-        
+
         // Clean up previous scroll listener
         if (docView && currentScrollSpyHandler) {
             docView.removeEventListener('scroll', currentScrollSpyHandler);
             currentScrollSpyHandler = null;
         }
-        
+
         tocList.innerHTML = '';
-        
+
         if (headers.length === 0) {
             tocSidebar.style.display = 'none';
         } else {
             tocSidebar.style.display = 'block';
             const headerElements = Array.from(headers);
             const tocItems = [];
-            
+
             headerElements.forEach((header, idx) => {
                 const headerId = `toc-section-${idx}`;
                 header.id = headerId;
-                
+
                 const li = document.createElement('li');
                 li.className = `toc-item toc-item-${header.tagName.toLowerCase()}`;
                 li.textContent = header.textContent;
-                
+
                 li.addEventListener('click', (e) => {
                     e.preventDefault();
                     header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    
+
                     document.querySelectorAll('.toc-item').forEach(el => el.classList.remove('active'));
                     li.classList.add('active');
                 });
-                
+
                 tocList.appendChild(li);
                 tocItems.push(li);
             });
-            
+
             // Notion-like Scroll Spy Implementation
             const handleScrollSpy = () => {
                 let activeIndex = 0;
                 const scrollContainerTop = docView.getBoundingClientRect().top;
-                
+
                 for (let i = 0; i < headerElements.length; i++) {
                     const rect = headerElements[i].getBoundingClientRect();
                     // Active when header is near the top of viewport (offset 170px)
@@ -1036,7 +1061,7 @@ async function highlightNode(index) {
                         break;
                     }
                 }
-                
+
                 tocItems.forEach((li, idx) => {
                     if (idx === activeIndex) {
                         li.classList.add('active');
@@ -1045,11 +1070,11 @@ async function highlightNode(index) {
                     }
                 });
             };
-            
+
             // Register scroll observer
             docView.addEventListener('scroll', handleScrollSpy);
             currentScrollSpyHandler = handleScrollSpy;
-            
+
             // Trigger once initially to highlight the top section
             handleScrollSpy();
         }
@@ -1067,7 +1092,7 @@ async function highlightNode(index) {
 
         const relatedList = document.getElementById('related-list');
         relatedList.innerHTML = '';
-        
+
         const connectedEdges = globalEdges.filter(edge => {
             const [sIdx, tIdx, score] = edge;
             return score >= currentThreshold && (sIdx === index || tIdx === index);
@@ -1100,11 +1125,11 @@ async function highlightNode(index) {
 
         applyGraphVisualState();
         updateActiveDocItem(index);
-        
+
         // Show Document Content View & Hide Welcome View
         document.getElementById('welcome-view').style.display = 'none';
         document.getElementById('doc-view').style.display = 'block';
-        
+
         // Scroll containers to top
         document.querySelector('.main-content').scrollTop = 0;
         document.getElementById('doc-view').scrollTop = 0;
@@ -1177,7 +1202,7 @@ function resetView() {
         activeSearchIndices = null;
         activeSubHighlight = null;
         updateActiveSubcategories();
-        
+
         // Clear search values
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');
@@ -1186,18 +1211,18 @@ function resetView() {
             searchResults.innerHTML = '';
             searchResults.classList.remove('active');
         }
-        
+
         // Show Welcome View & Hide Document Content View
         document.getElementById('welcome-view').style.display = 'block';
         document.getElementById('doc-view').style.display = 'none';
-        
+
         // Clear Scroll Spy Handler
         const docView = document.getElementById('doc-view');
         if (docView && currentScrollSpyHandler) {
             docView.removeEventListener('scroll', currentScrollSpyHandler);
             currentScrollSpyHandler = null;
         }
-        
+
         applyGraphVisualState();
         updateActiveDocItem(-1);
     } catch (err) {

@@ -36,6 +36,10 @@ EXCLUDED_FILENAMES = ["README.md", "TEMPLATE.md"]
 # File extensions to index
 SUPPORTED_EXTENSIONS = [".md"]
 
+# Chunking Configuration
+MAX_CHUNK_SIZE = int(os.getenv("THOUGHT_SEARCH_MAX_CHUNK", "800"))
+CHUNKING_OVERLAP = int(os.getenv("THOUGHT_SEARCH_OVERLAP", "200"))
+
 # Ollama LLM Configuration for RAG
 OLLAMA_HOST = os.getenv("THOUGHT_SEARCH_OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("THOUGHT_SEARCH_OLLAMA_MODEL", "qwen2.5-coder:14b")
