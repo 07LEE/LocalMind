@@ -6,6 +6,7 @@ import numpy as np
 from collections import Counter
 from .config import EMBEDDING_MODEL, RERANK_MODEL
 from sentence_transformers import CrossEncoder
+import torch
 
 # Hide internal warning messages
 warnings.filterwarnings("ignore")
@@ -38,7 +39,8 @@ class SimpleVectorDB:
         self.dense_engine._load_model()
         # Force load reranker
         if self.reranker is None:
-            self.reranker = CrossEncoder(self.rerank_model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.reranker = CrossEncoder(self.rerank_model_name, device=device)
         print(f"LOGE: [VectorDB] All models loaded.")
 
     def add_texts(self, texts, metadatas=None):
@@ -190,7 +192,8 @@ class SimpleVectorDB:
             return []
             
         if self.reranker is None:
-            self.reranker = CrossEncoder(self.rerank_model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.reranker = CrossEncoder(self.rerank_model_name, device=device)
             
         pairs = [[query, res["text"]] for res in results]
         rerank_scores = self.reranker.predict(pairs)

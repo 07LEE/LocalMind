@@ -1,5 +1,6 @@
 import numpy as np
 import faiss
+import torch
 from sentence_transformers import SentenceTransformer
 
 class DenseIndex:
@@ -28,7 +29,8 @@ class DenseIndex:
     def _load_model(self):
         """Initializes the sentence-transformer model lazily."""
         if self.model is None:
-            self.model = SentenceTransformer(self.model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.model = SentenceTransformer(self.model_name, device=device)
 
     def embed(self, texts):
         """Calculates normalized embeddings for a list of texts.
