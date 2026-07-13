@@ -102,6 +102,7 @@ def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10, rag=
     Returns:
         list[dict]: The results found (to allow interactive opening).
     """
+    from core.vector_db import clean_markdown
     # ANSI color codes for sophisticated look
     BOLD = "\033[1m"
     CYAN = "\033[36m"
@@ -114,7 +115,7 @@ def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10, rag=
     print(f"{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
     
     # Increase k to ensure we have enough unique documents after deduplication
-    initial_k = max(top_k * 5, rerank_k) if rerank else top_k * 5
+    initial_k = max(top_k * 2, 5) if rerank else top_k * 2
     results = db.search_hybrid(query, top_k=initial_k)
     
     # 1. Apply Threshold filtering BEFORE reranking (optional, but saves compute)
@@ -156,7 +157,7 @@ def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10, rag=
         title = meta.get("title", meta.get("filename", "Unknown"))
         tags = meta.get("tags", [])
         categories = meta.get("categories", [])
-        snippet = res["text"].strip()
+        snippet = clean_markdown(res["text"]).strip()
 
         # Format header with Category and Title
         cat_str = f"[{' > '.join(categories)}] " if categories else ""

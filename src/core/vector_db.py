@@ -235,7 +235,8 @@ class SimpleVectorDB:
             self.reranker = CrossEncoder(self.rerank_model_name, device=device)
             
         pairs = [[query, res["text"]] for res in results]
-        rerank_scores = self.reranker.predict(pairs)
+        with torch.inference_mode():
+            rerank_scores = self.reranker.predict(pairs)
         
         for i, res in enumerate(results):
             res["rerank_score"] = float(rerank_scores[i])
@@ -304,3 +305,24 @@ class SimpleVectorDB:
         
         # Rebuild Sparse Index
         self.sparse_engine.rebuild(self.documents)
+
+def clean_markdown(text):
+    """Removes common markdown formatting characters to return plain text."""
+    import re
+    # 1. Remove markdown headers (e.g., ### Title)
+    text = re.sub(r'#+\s+', '', text)
+    # 2. Remove bold/italic markup (e.g., **bold**, *italic*)
+    text = re.sub(r'\*\*|__', '', text)
+    text = re.sub(r'\*|_', '', text)
+    # 3. Remove inline code blocks (e.g., `code`)
+    text = re.sub(r'`[^`]+`', '', text)
+    # 4. Remove links [text](url) -> text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # 5. Remove task list markers (e.g., - [ ] or - [x])
+    text = re.sub(r'-\s+\[[ xX]\]\s+', '', text)
+    # 6. Remove bullet/number list prefixes (e.g., - Item, 1. Item) at line start
+    text = re.sub(r'(?m)^[\s]*[-\*\+]\s+', '', text)
+    text = re.sub(r'(?m)^[\s]*\d+\.\s+', '', text)
+    # 7. Strip extra whitespace
+    text = '\n'.join(line.strip() for line in text.splitlines())
+    return text.strip()

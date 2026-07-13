@@ -149,8 +149,9 @@ def search():
             db.pre_load_models()
             db.models_loaded = True
 
+        from core.vector_db import clean_markdown
         # Increase initial k for hybrid search before reranking
-        initial_k = max(top_k * 5, 10)
+        initial_k = max(top_k * 2, 5)
         results = db.search_hybrid(query, top_k=initial_k)
         
         if rerank and len(results) > 1:
@@ -167,6 +168,9 @@ def search():
                 if len(unique_results) >= top_k:
                     break
         
+        for res in unique_results:
+            res["snippet"] = clean_markdown(res["text"])
+
         return jsonify({
             "status": "success",
             "results": unique_results

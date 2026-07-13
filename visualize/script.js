@@ -661,7 +661,7 @@ async function init() {
 
                     item.innerHTML = `
                         <div class="result-title">${title}</div>
-                        <div class="result-snippet">${res.text}</div>
+                        <div class="result-snippet">${res.snippet || res.text}</div>
                         <div class="result-meta">
                             <div class="result-score">Similarity: ${score.toFixed(4)}</div>
                         </div>
