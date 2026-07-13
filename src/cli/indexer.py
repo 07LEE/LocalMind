@@ -177,8 +177,13 @@ def parse_markdown(filepath, rel_path=""):
     final_metadatas = []
     
     for chunk in raw_chunks:
-        # Create a search-optimized version by stripping code blocks
-        clean_chunk = re.sub(r'```.*?```', '', chunk, flags=re.DOTALL).strip()
+        # Create a search-optimized version by stripping code blocks and markdown visual elements
+        clean_chunk = re.sub(r'```.*?```', '', chunk, flags=re.DOTALL)
+        # Remove markdown images entirely (e.g. ![alt](image.png))
+        clean_chunk = re.sub(r'!\[.*?\]\(.*?\)', '', clean_chunk)
+        # Simplify markdown links to their text contents only (e.g. [text](url) -> text)
+        clean_chunk = re.sub(r'\[(.*?)\]\([^\)]+\)', r'\1', clean_chunk)
+        clean_chunk = clean_chunk.strip()
         
         # If the chunk becomes too empty after stripping code, 
         # we still keep it but use the original chunk as fallback for search context 
@@ -280,13 +285,11 @@ def index_markdown_files(posts_dir, db_path, model_name=None):
           f"Deleted: {len(deleted)}, Unchanged: {unchanged_count}\n")
 
     # --- Remove Stale Entries ---
-    for identifier in deleted | changed:
-        # SimpleVectorDB matches by 'filename' metadata, so we pass rel_path here if we use it as ID.
-        # But we've updated metadata to store rel_path as well.
-        removed = db.remove_by_filename(identifier)
-        if identifier in deleted:
-            db.file_hashes.pop(identifier, None)
-            print(f"LOGE: [Indexer] Removed: {identifier} ({removed} chunks)")
+    stale_files = deleted | changed
+    if stale_files:
+        db.remove_by_filenames(stale_files)
+        for identifier in deleted:
+            print(f"LOGE: [Indexer] Removed: {identifier}")
 
     # --- Index New & Changed Files (Parallel Version) ---
     all_chunks = []

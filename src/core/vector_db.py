@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import warnings
 import logging
 import numpy as np
@@ -53,11 +54,17 @@ class SimpleVectorDB:
         """
         print(f"LOGE: [VectorDB] Processing {len(texts)} texts...")
         
-        # 1. Update Dense (Vector) Engine
-        new_vectors = self.dense_engine.embed(texts, batch_size=batch_size)
+        # 1. Preprocess texts to remove markdown alert tags for embedding calculation
+        cleaned_texts = [
+            re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', t, flags=re.IGNORECASE)
+            for t in texts
+        ]
+
+        # 2. Update Dense (Vector) Engine with cleaned texts
+        new_vectors = self.dense_engine.embed(cleaned_texts, batch_size=batch_size)
         self.dense_engine.add_vectors(new_vectors)
 
-        # 2. Update Common Data
+        # 3. Update Common Data (Keep original texts with original markdown styling intact)
         self.documents.extend(texts)
         if metadatas:
             self.metadata.extend(metadatas)
@@ -104,6 +111,44 @@ class SimpleVectorDB:
         self.file_hashes.pop(filename, None)
         return removed_count
 
+    def remove_by_filenames(self, filenames):
+        """Removes all entries associated with a set of source filenames.
+
+        Args:
+            filenames: An iterable of source filenames to remove.
+
+        Returns:
+            The number of entries removed.
+        """
+        filenames_set = set(filenames)
+        indices_to_keep = [
+            i for i, m in enumerate(self.metadata) 
+            if m.get("rel_path", m.get("filename")) not in filenames_set
+        ]
+        removed_count = len(self.documents) - len(indices_to_keep)
+
+        if removed_count == 0:
+            return 0
+
+        # Update common data
+        self.documents = [self.documents[i] for i in indices_to_keep]
+        self.metadata = [self.metadata[i] for i in indices_to_keep]
+        
+        # Update Dense Engine vectors
+        all_vectors = self.dense_engine.get_vectors()
+        if all_vectors is not None and len(indices_to_keep) > 0:
+            self.dense_engine.set_vectors(all_vectors[indices_to_keep])
+        else:
+            self.dense_engine.set_vectors(None)
+
+        # Update Sparse Engine index
+        self.sparse_engine.rebuild(self.documents)
+
+        # Update file hashes cache
+        for filename in filenames_set:
+            self.file_hashes.pop(filename, None)
+        return removed_count
+
     def _preprocess_query(self, query):
         """Preprocesses the user query by replacing Korean phonetic transliterations with standard English terms.
 
@@ -113,6 +158,8 @@ class SimpleVectorDB:
         Returns:
             str: The normalized search query.
         """
+        # Remove markdown alert tags like [!NOTE], [!WARNING], etc.
+        query = re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', query, flags=re.IGNORECASE)
         return self.sparse_engine.dict_manager.preprocess_query(query)
 
     def search(self, query, top_k=3):
@@ -197,7 +244,8 @@ class SimpleVectorDB:
             self.reranker = CrossEncoder(self.rerank_model_name, device=device)
             
         pairs = [[query, res["text"]] for res in results]
-        rerank_scores = self.reranker.predict(pairs)
+        with torch.inference_mode():
+            rerank_scores = self.reranker.predict(pairs)
         
         for i, res in enumerate(results):
             res["rerank_score"] = float(rerank_scores[i])
@@ -266,3 +314,24 @@ class SimpleVectorDB:
         
         # Rebuild Sparse Index
         self.sparse_engine.rebuild(self.documents)
+
+def clean_markdown(text):
+    """Removes common markdown formatting characters to return plain text."""
+    import re
+    # 1. Remove markdown headers (e.g., ### Title)
+    text = re.sub(r'#+\s+', '', text)
+    # 2. Remove bold/italic markup (e.g., **bold**, *italic*)
+    text = re.sub(r'\*\*|__', '', text)
+    text = re.sub(r'\*|_', '', text)
+    # 3. Remove inline code blocks (e.g., `code`)
+    text = re.sub(r'`[^`]+`', '', text)
+    # 4. Remove links [text](url) -> text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # 5. Remove task list markers (e.g., - [ ] or - [x])
+    text = re.sub(r'-\s+\[[ xX]\]\s+', '', text)
+    # 6. Remove bullet/number list prefixes (e.g., - Item, 1. Item) at line start
+    text = re.sub(r'(?m)^[\s]*[-\*\+]\s+', '', text)
+    text = re.sub(r'(?m)^[\s]*\d+\.\s+', '', text)
+    # 7. Strip extra whitespace
+    text = '\n'.join(line.strip() for line in text.splitlines())
+    return text.strip()

@@ -1,6 +1,7 @@
 import numpy as np
 import faiss
 import torch
+import threading
 from sentence_transformers import SentenceTransformer
 
 class DenseIndex:
@@ -25,6 +26,7 @@ class DenseIndex:
         self.model = None
         self.vectors = None
         self.index = None
+        self.lock = threading.Lock()
 
     def _load_model(self):
         """Initializes the sentence-transformer model lazily."""
@@ -43,7 +45,8 @@ class DenseIndex:
             np.ndarray: Normalized embedding vectors of shape (n_texts, dimension).
         """
         self._load_model()
-        embeddings = self.model.encode(texts, batch_size=batch_size, show_progress_bar=False)
+        with torch.inference_mode():
+            embeddings = self.model.encode(texts, batch_size=batch_size, show_progress_bar=False)
         # L2 Normalization for cosine similarity
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return embeddings / (norms + 1e-10)
@@ -54,23 +57,25 @@ class DenseIndex:
         This is an internal method called whenever the vector pool changes.
         It uses IndexFlatIP to support cosine similarity on normalized vectors.
         """
-        if self.vectors is None:
-            self.index = None
-            return
+        with self.lock:
+            if self.vectors is None:
+                self.index = None
+                return
 
-        dimension = self.vectors.shape[1]
-        # Using IndexFlatIP (Inner Product) for cosine similarity on normalized vectors
-        cpu_index = faiss.IndexFlatIP(dimension)
-        if torch.cuda.is_available():
-            try:
-                res = faiss.StandardGpuResources()
-                self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
-            except Exception as e:
-                print(f"LOGE: [DenseIndex] Failed to convert FAISS index to GPU: {e}")
+            dimension = self.vectors.shape[1]
+            # Using IndexFlatIP (Inner Product) for cosine similarity on normalized vectors
+            cpu_index = faiss.IndexFlatIP(dimension)
+            if torch.cuda.is_available():
+                try:
+                    res = faiss.StandardGpuResources()
+                    res.setTempMemory(64 * 1024 * 1024)
+                    self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
+                except Exception as e:
+                    print(f"LOGE: [DenseIndex] Failed to convert FAISS index to GPU: {e}")
+                    self.index = cpu_index
+            else:
                 self.index = cpu_index
-        else:
-            self.index = cpu_index
-        self.index.add(self.vectors.astype('float32'))
+            self.index.add(self.vectors.astype('float32'))
 
     def add_vectors(self, new_vectors):
         """Adds pre-calculated vectors to the index and updates the search index.
@@ -97,31 +102,33 @@ class DenseIndex:
         Returns:
             list[dict]: A list of result dictionaries containing score, text, and metadata.
         """
-        if self.index is None or len(documents) == 0:
-            return []
+        with self.lock:
+            if self.index is None or len(documents) == 0:
+                return []
 
-        self._load_model()
-        # 1. Encode and normalize query
-        query_vector = self.model.encode(query).reshape(1, -1).astype('float32')
-        faiss.normalize_L2(query_vector)
+            self._load_model()
+            # 1. Encode and normalize query
+            with torch.inference_mode():
+                query_vector = self.model.encode(query).reshape(1, -1).astype('float32')
+            faiss.normalize_L2(query_vector)
 
-        # 2. Search FAISS index
-        # search() returns (distances, indices)
-        # For IndexFlatIP, distances are inner products (scores)
-        scores, indices = self.index.search(query_vector, top_k)
+            # 2. Search FAISS index
+            # search() returns (distances, indices)
+            # For IndexFlatIP, distances are inner products (scores)
+            scores, indices = self.index.search(query_vector, top_k)
 
-        results = []
-        for i, idx in enumerate(indices[0]):
-            if idx == -1: continue # No more results found
-            
-            results.append({
-                "score": float(scores[0][i]),
-                "text": documents[idx],
-                "metadata": metadata[idx],
-                "index": int(idx),
-                "type": "vector"
-            })
-        return results
+            results = []
+            for i, idx in enumerate(indices[0]):
+                if idx == -1: continue # No more results found
+                
+                results.append({
+                    "score": float(scores[0][i]),
+                    "text": documents[idx],
+                    "metadata": metadata[idx],
+                    "index": int(idx),
+                    "type": "vector"
+                })
+            return results
 
     def set_vectors(self, vectors):
         """Sets the internal vector pool and rebuilds the search index.

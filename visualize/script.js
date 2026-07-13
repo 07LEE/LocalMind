@@ -239,7 +239,8 @@ function hlsToHex(h, l, s) {
 
 // --- Theme Management ---
 function updatePlotlyTheme(theme) {
-    if (!document.getElementById('plot')) return;
+    const plotEl = document.getElementById('plot');
+    if (!plotEl || !plotEl.data) return;
 
     const edgeColor = theme === 'light' ? 'rgba(70, 130, 220, 0.85)' : 'rgba(88, 166, 255, 0.15)';
     const nodeLineColor = theme === 'light' ? 'rgba(36, 41, 47, 0.4)' : 'rgba(201, 209, 217, 0.1)';
@@ -261,27 +262,34 @@ async function init() {
     try {
         // Theme initialization
         const themeToggle = document.getElementById('theme-toggle');
+        const themeToggleMobile = document.getElementById('theme-toggle-mobile');
         let currentTheme = localStorage.getItem('theme') || 'dark';
 
-        if (currentTheme === 'light') {
-            document.body.classList.remove('dark-mode');
-            document.body.classList.add('light-mode');
-        } else {
-            document.body.classList.remove('light-mode');
-            document.body.classList.add('dark-mode');
+        function applyTheme(theme) {
+            if (theme === 'light') {
+                document.body.classList.remove('dark-mode');
+                document.body.classList.add('light-mode');
+            } else {
+                document.body.classList.remove('light-mode');
+                document.body.classList.add('dark-mode');
+            }
+            updatePlotlyTheme(theme);
         }
 
-        themeToggle.addEventListener('click', () => {
+        applyTheme(currentTheme);
+
+        const handleThemeToggle = () => {
             if (document.body.classList.contains('dark-mode')) {
-                document.body.classList.replace('dark-mode', 'light-mode');
                 localStorage.setItem('theme', 'light');
-                updatePlotlyTheme('light');
+                applyTheme('light');
             } else {
-                document.body.classList.replace('light-mode', 'dark-mode');
                 localStorage.setItem('theme', 'dark');
-                updatePlotlyTheme('dark');
+                applyTheme('dark');
             }
-        });
+        };
+
+        if (themeToggle) themeToggle.addEventListener('click', handleThemeToggle);
+        if (themeToggleMobile) themeToggleMobile.addEventListener('click', handleThemeToggle);
 
         // --- Markdown Setup ---
         marked.use({
@@ -653,7 +661,7 @@ async function init() {
 
                     item.innerHTML = `
                         <div class="result-title">${title}</div>
-                        <div class="result-snippet">${res.text}</div>
+                        <div class="result-snippet">${res.snippet || res.text}</div>
                         <div class="result-meta">
                             <div class="result-score">Similarity: ${score.toFixed(4)}</div>
                         </div>
@@ -845,6 +853,57 @@ async function init() {
             }
         });
 
+        // --- Mobile Interactions ---
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+        const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+        const sidebar = document.getElementById('sidebar');
+
+        const closeSidebar = () => {
+            if (sidebar && sidebarBackdrop) {
+                sidebar.classList.remove('open');
+                sidebarBackdrop.classList.remove('active');
+            }
+        };
+
+        if (mobileMenuBtn && sidebar && sidebarBackdrop) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.add('open');
+                sidebarBackdrop.classList.add('active');
+            });
+        }
+
+        if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', closeSidebar);
+        if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeSidebar);
+
+        // Controls Settings Panel Toggle (Mobile)
+        const controlsToggleBtn = document.getElementById('controls-toggle-btn');
+        const vizOverlayControls = document.getElementById('viz-overlay-controls');
+        if (controlsToggleBtn && vizOverlayControls) {
+            controlsToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                vizOverlayControls.classList.toggle('open');
+            });
+            document.addEventListener('click', (e) => {
+                if (!controlsToggleBtn.contains(e.target) && !vizOverlayControls.contains(e.target)) {
+                    vizOverlayControls.classList.remove('open');
+                }
+            });
+        }
+
+
+
+        // Window Resize Event for Responsive Plotly Graph
+        window.addEventListener('resize', () => {
+            const plotDiv = document.getElementById('plot');
+            if (plotDiv && Plotly) {
+                Plotly.Plots.resize(plotDiv).catch(() => {});
+            }
+        });
+
+        // Expose closeSidebar globally so it can be called in highlightNode
+        window.closeMobileSidebar = closeSidebar;
+
     } catch (error) {
         console.error('Error:', error);
     }
@@ -855,6 +914,11 @@ async function highlightNode(index) {
     isUpdating = true;
     lastHighlightedIndex = index;
     try {
+        // Close mobile sidebar drawer automatically on document click
+        if (window.closeMobileSidebar) {
+            window.closeMobileSidebar();
+        }
+
         const item = globalNodes[index];
         if (!item) return;
 
