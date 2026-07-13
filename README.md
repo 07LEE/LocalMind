@@ -8,7 +8,7 @@
 - **Hybrid Search:** Combines semantic (Vector) and keyword (BM25) search using Reciprocal Rank Fusion (RRF) for superior accuracy.
 - **Korean Morphological Analysis:** Integrated with `kiwipiepy` (Kiwi) for precise Korean tokenization and particle removal.
 - **Custom Dictionary:** Supports external dictionary management via `Personal-Dictionary` to protect technical terms (e.g., 3DGS, COLMAP).
-- **Markdown Parsing:** Splits raw `.md` files into paragraph-level chunks for indexing.
+- **Markdown Parsing & Search Optimization:** Splits raw `.md` files into paragraph-level chunks for indexing, while stripping formatting noise (such as code blocks, markdown image syntax `![alt](url)`, and simplifying markdown links `[text](url)` to only search their text contents). It also filters out markdown alert tags (e.g. `[!NOTE]`, `[!WARNING]`) to prevent semantic skewing during embedding and keyword analysis.
 - **Local Embedding:** Generates text embeddings locally using a configurable `sentence-transformers` model.
 - **Hierarchical Support:** Recursively searches for markdown files in subdirectories.
 - **Category Extraction:** Automatically extracts folder names from the directory structure and stores them as `categories` metadata.
@@ -82,7 +82,23 @@ You can override the default posts directory using the `THOUGHT_SEARCH_POSTS` en
 export THOUGHT_SEARCH_POSTS="/path/to/your/knowledge-base"
 ```
 
-### 3. Usage
+### 3. Local LLM RAG Configuration
+
+To use the RAG (Retrieval-Augmented Generation) feature:
+
+1. Install and run [Ollama](https://ollama.com/) on your local machine.
+2. Pull the default LLM model (or your customized model):
+   ```bash
+   ollama pull qwen2.5-coder:14b
+   ```
+3. Ensure the Ollama server is running (defaults to `http://localhost:11434`).
+4. (Optional) Customize the connection or model using environment variables:
+   ```bash
+   export THOUGHT_SEARCH_OLLAMA_HOST="http://localhost:11434"
+   export THOUGHT_SEARCH_OLLAMA_MODEL="qwen2.5-coder:14b"
+   ```
+
+### 4. Usage
 
 The most convenient way to use Thought-Search is via the `run.sh` script, which automatically activates the environment, indexes your documents, and starts the search engine.
 
@@ -110,7 +126,7 @@ python src/cli/search.py "Your query here"
 python src/cli/search.py "Your query here" --rag
 ```
 
-### 3D Visualization
+### 5. 3D Visualization
 
 Visualize your knowledge base in an interactive 3D space:
 
