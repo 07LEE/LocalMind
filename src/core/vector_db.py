@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import warnings
 import logging
 import numpy as np
@@ -53,11 +54,17 @@ class SimpleVectorDB:
         """
         print(f"LOGE: [VectorDB] Processing {len(texts)} texts...")
         
-        # 1. Update Dense (Vector) Engine
-        new_vectors = self.dense_engine.embed(texts, batch_size=batch_size)
+        # 1. Preprocess texts to remove markdown alert tags for embedding calculation
+        cleaned_texts = [
+            re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', t, flags=re.IGNORECASE)
+            for t in texts
+        ]
+
+        # 2. Update Dense (Vector) Engine with cleaned texts
+        new_vectors = self.dense_engine.embed(cleaned_texts, batch_size=batch_size)
         self.dense_engine.add_vectors(new_vectors)
 
-        # 2. Update Common Data
+        # 3. Update Common Data (Keep original texts with original markdown styling intact)
         self.documents.extend(texts)
         if metadatas:
             self.metadata.extend(metadatas)
@@ -151,6 +158,8 @@ class SimpleVectorDB:
         Returns:
             str: The normalized search query.
         """
+        # Remove markdown alert tags like [!NOTE], [!WARNING], etc.
+        query = re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', query, flags=re.IGNORECASE)
         return self.sparse_engine.dict_manager.preprocess_query(query)
 
     def search(self, query, top_k=3):

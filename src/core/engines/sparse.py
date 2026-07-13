@@ -57,6 +57,9 @@ class SparseIndex:
         if not text:
             return []
 
+        # Remove markdown alert tags like [!NOTE], [!WARNING], etc.
+        text = re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', text, flags=re.IGNORECASE)
+
         # Using Kiwi for high-quality Korean tokenization
         tokens = self.kiwi.tokenize(text.lower())
         

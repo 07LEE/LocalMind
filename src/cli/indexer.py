@@ -177,8 +177,13 @@ def parse_markdown(filepath, rel_path=""):
     final_metadatas = []
     
     for chunk in raw_chunks:
-        # Create a search-optimized version by stripping code blocks
-        clean_chunk = re.sub(r'```.*?```', '', chunk, flags=re.DOTALL).strip()
+        # Create a search-optimized version by stripping code blocks and markdown visual elements
+        clean_chunk = re.sub(r'```.*?```', '', chunk, flags=re.DOTALL)
+        # Remove markdown images entirely (e.g. ![alt](image.png))
+        clean_chunk = re.sub(r'!\[.*?\]\(.*?\)', '', clean_chunk)
+        # Simplify markdown links to their text contents only (e.g. [text](url) -> text)
+        clean_chunk = re.sub(r'\[(.*?)\]\([^\)]+\)', r'\1', clean_chunk)
+        clean_chunk = clean_chunk.strip()
         
         # If the chunk becomes too empty after stripping code, 
         # we still keep it but use the original chunk as fallback for search context 
