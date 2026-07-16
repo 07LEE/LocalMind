@@ -1322,13 +1322,27 @@ async function highlightNode(index) {
         let renderedHtml = markdownParse(processedContent);
 
         // Convert GFM alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
-        // Supports both multiline and inline formats under a unified regex, allowing bold tags around alert type
+        // Supports multiline alerts containing block elements (like lists or multiple paragraphs)
         renderedHtml = renderedHtml.replace(
-            /<blockquote>\s*<p>(?:<strong>|<b>)?\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<\/strong>|<\/b>)?\s*(?:(?:&gt;|>)\s*)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
-            (match, type, content) => {
-                const t = type.toUpperCase();
-                const icons = { NOTE: '[INFO]', TIP: '[TIP]', IMPORTANT: '[IMPORTANT]', WARNING: '[WARNING]', CAUTION: '[CAUTION]' };
-                return `<div class="gfm-alert gfm-alert-${t.toLowerCase()}"><p class="gfm-alert-title">${icons[t] || t}</p><p>${content.trim()}</p></div>`;
+            /<blockquote>([\s\S]*?)<\/blockquote>/gi,
+            (match, content) => {
+                const alertRegex = /^\s*<p>(?:<strong>|<b>)?\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<\/strong>|<\/b>)?\s*(?:(?:&gt;|>)\s*)?(?:\s*<br\s*\/?>)?\s*([\s\S]*)$/i;
+                const alertMatch = content.match(alertRegex);
+                if (alertMatch) {
+                    const type = alertMatch[1].toUpperCase();
+                    const remainder = alertMatch[2];
+                    const icons = { NOTE: '[INFO]', TIP: '[TIP]', IMPORTANT: '[IMPORTANT]', WARNING: '[WARNING]', CAUTION: '[CAUTION]' };
+                    
+                    let newContent = '';
+                    if (remainder.trim().startsWith('</p>')) {
+                        newContent = remainder.replace(/^\s*<\/p>/i, '');
+                    } else {
+                        newContent = `<p>${remainder}`;
+                    }
+                    
+                    return `<div class="gfm-alert gfm-alert-${type.toLowerCase()}"><p class="gfm-alert-title">${icons[type] || type}</p>${newContent}</div>`;
+                }
+                return match;
             }
         );
 
