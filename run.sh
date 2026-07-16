@@ -15,16 +15,16 @@ YELLOW="\033[33m"
 RESET="\033[0m"
 export PYTHONPATH=$BASE_DIR/src
 
-echo -e "${CYAN}${BOLD}🚀 Thought-Search System Initializing...${RESET}"
+echo -e "${CYAN}${BOLD}[System] Thought-Search System Initializing...${RESET}"
 
 # 2. Environment Activation
 if [ -n "$VIRTUAL_ENV" ]; then
-    echo -e "${GREEN}✔ Active Virtual Environment detected: $(basename "$VIRTUAL_ENV")${RESET}"
+    echo -e "${GREEN}[OK] Active Virtual Environment detected: $(basename "$VIRTUAL_ENV")${RESET}"
 elif [ -n "$CONDA_DEFAULT_ENV" ]; then
-    echo -e "${GREEN}✔ Active Conda Environment detected: $CONDA_DEFAULT_ENV${RESET}"
+    echo -e "${GREEN}[OK] Active Conda Environment detected: $CONDA_DEFAULT_ENV${RESET}"
 elif [ -d ".venv" ]; then
     source .venv/bin/activate
-    echo -e "${GREEN}✔ Local .venv activated.${RESET}"
+    echo -e "${GREEN}[OK] Local .venv activated.${RESET}"
 else
     # Check common conda installation locations using $HOME
     CONDA_ACTIVATE=""
@@ -37,40 +37,40 @@ else
 
     if [ -n "$CONDA_ACTIVATE" ]; then
         source "$CONDA_ACTIVATE" thought-search
-        echo -e "${GREEN}✔ Conda thought-search environment activated via $CONDA_ACTIVATE.${RESET}"
+        echo -e "${GREEN}[OK] Conda thought-search environment activated via $CONDA_ACTIVATE.${RESET}"
     else
-        echo -e "${YELLOW}⚠ Warning: No virtual environment detected. Proceeding with system python...${RESET}"
+        echo -e "${YELLOW}[Warning] No virtual environment detected. Proceeding with system python...${RESET}"
     fi
 fi
 
 # Check for Visualization Mode
 if [ "$1" == "--viz" ]; then
-    echo -e "${CYAN}${BOLD}🌐 Launching Visualization Server at http://localhost:8080...${RESET}"
+    echo -e "${CYAN}${BOLD}[Server] Launching Visualization Server at http://localhost:8080...${RESET}"
     python3 src/core/server.py
     exit 0
 fi
 
 # 3. Synchronize Knowledge (Auto-Indexing)
-echo -e "${CYAN}${BOLD}📂 Syncing Knowledge Base...${RESET}"
+echo -e "${CYAN}${BOLD}[Sync] Syncing Knowledge Base...${RESET}"
 python3 src/cli/indexer.py
 if [ $? -ne 0 ]; then
-    echo -e "\033[31m✖ Error: Indexing failed. Please check your document structure.${RESET}"
+    echo -e "\033[31m[Error] Indexing failed. Please check your document structure.${RESET}"
     exit 1
 fi
 
 # 3.4. Extract Visualization Data
-echo -e "${CYAN}${BOLD}📊 Extracting Visualization Data...${RESET}"
+echo -e "${CYAN}${BOLD}[Data] Extracting Visualization Data...${RESET}"
 python3 src/viz/extract_viz_data.py
 if [ $? -ne 0 ]; then
-    echo -e "\033[31m✖ Error: Data extraction failed.${RESET}"
+    echo -e "\033[31m[Error] Data extraction failed.${RESET}"
     exit 1
 fi
 
 # 3.5. Encrypt Visualization Data
-echo -e "${CYAN}${BOLD}🔒 Encrypting Visualization Data...${RESET}"
+echo -e "${CYAN}${BOLD}[Security] Encrypting Visualization Data...${RESET}"
 python3 src/viz/encrypt_viz_data.py
 if [ $? -ne 0 ]; then
-    echo -e "\033[31m✖ Error: Data encryption failed.${RESET}"
+    echo -e "\033[31m[Error] Data encryption failed.${RESET}"
     exit 1
 fi
 

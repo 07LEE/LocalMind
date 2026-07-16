@@ -2,7 +2,8 @@ import os
 import sys
 import threading
 import subprocess
-from flask import Flask, jsonify, send_from_directory, request
+import json
+from flask import Flask, jsonify, send_from_directory, request, Response, stream_with_context
 from flask_cors import CORS
 
 # Ensure the root directory is in sys.path for relative imports
@@ -28,6 +29,57 @@ sync_lock = threading.Lock()
 sync_status = "idle"  # States: "idle", "processing", "error: <msg>"
 
 # Models will be lazy-loaded on the first search request
+
+def log_unknown_query_if_needed(query, response_text):
+    """지식 부재(답변 불가능) 질문을 data/unknown_queries.json에 기록합니다."""
+    keywords = [
+        "정보가 없습니다", 
+        "답변할 수 없습니다", 
+        "알 수 없습니다", 
+        "찾을 수 없습니다", 
+        "언급되어 있지 않습니다", 
+        "언급되지 않았습니다",
+        "제시된 문서에는",
+        "제공된 문서에는"
+    ]
+    
+    is_unknown = any(kw in response_text for kw in keywords)
+    if not is_unknown:
+        return
+        
+    from datetime import datetime
+    import json
+    
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    log_file = os.path.join(data_dir, "unknown_queries.json")
+    
+    records = []
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                records = json.load(f)
+                if not isinstance(records, list):
+                    records = []
+        except Exception:
+            records = []
+            
+    if records and records[-1].get("query") == query:
+        return
+        
+    new_record = {
+        "query": query,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "response_snippet": response_text[:100] + "..." if len(response_text) > 100 else response_text
+    }
+    records.append(new_record)
+    
+    try:
+        with open(log_file, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False, indent=2)
+        print(f"LOGI: [Server] Logged unknown query: '{query}'")
+    except Exception as e:
+        print(f"LOGE: [Server] Failed to write unknown query log: {e}")
 
 def _run_sync_background():
     global sync_status
@@ -181,6 +233,90 @@ def search():
             "status": "error",
             "message": str(e)
         }), 500
+
+@app.route('/api/rag', methods=['GET'])
+def rag_search():
+    """API endpoint for RAG (Retrieval-Augmented Generation) search with SSE streaming."""
+    query = request.args.get('q', '')
+    top_k = int(request.args.get('k', 5))
+    rerank = request.args.get('rerank', 'true').lower() == 'true'
+    
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+        
+    try:
+        # Lazy load models if they are not loaded yet
+        if not hasattr(db, 'models_loaded') or not db.models_loaded:
+            print("LOGE: [Server] Lazy-loading models on first search request...")
+            db.pre_load_models()
+            db.models_loaded = True
+
+        # Perform hybrid search for context
+        initial_k = max(top_k * 2, 5)
+        results = db.search_hybrid(query, top_k=initial_k)
+        
+        if rerank and len(results) > 1:
+            results = db.rerank(query, results)
+            
+        # Deduplicate and limit to top_k
+        unique_results = []
+        seen_paths = set()
+        for res in results:
+            path = res["metadata"].get("rel_path")
+            if path not in seen_paths:
+                unique_results.append(res)
+                seen_paths.add(path)
+                if len(unique_results) >= top_k:
+                    break
+        
+        from core.vector_db import clean_markdown
+        for res in unique_results:
+            res["snippet"] = clean_markdown(res["text"])
+
+        from core.llm import OllamaClient
+        client = OllamaClient()
+        prompt = client.build_rag_prompt(query, unique_results)
+
+        def generate():
+            # Send search results metadata first
+            meta_payload = {
+                "type": "metadata",
+                "results": [
+                    {
+                        "score": res.get("rerank_score", res["score"]),
+                        "metadata": res["metadata"],
+                        "snippet": res["snippet"]
+                    }
+                    for res in unique_results
+                ]
+            }
+            yield f"data: {json.dumps(meta_payload)}\n\n"
+            
+            # Stream response content from Ollama
+            full_response = ""
+            for token in client.generate_stream(prompt):
+                full_response += token
+                content_payload = {
+                    "type": "content",
+                    "text": token
+                }
+                yield f"data: {json.dumps(content_payload)}\n\n"
+                
+            try:
+                log_unknown_query_if_needed(query, full_response)
+            except Exception as log_err:
+                print(f"LOGE: [Server] RAG response log error: {log_err}")
+                
+            yield "data: [DONE]\n\n"
+
+        return Response(stream_with_context(generate()), content_type='text/event-stream')
+    except Exception as e:
+        print(f"LOGE: [Server] RAG search error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

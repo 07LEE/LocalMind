@@ -247,8 +247,11 @@ class SimpleVectorDB:
         with torch.inference_mode():
             rerank_scores = self.reranker.predict(pairs)
         
+        import math
         for i, res in enumerate(results):
-            res["rerank_score"] = float(rerank_scores[i])
+            raw_score = float(rerank_scores[i])
+            # Cross-Encoder의 로짓 점수를 0.0 ~ 1.0 사이의 직관적인 유사도 확률값으로 변환
+            res["rerank_score"] = 1.0 / (1.0 + math.exp(-raw_score))
             
         results.sort(key=lambda x: x["rerank_score"], reverse=True)
         return results

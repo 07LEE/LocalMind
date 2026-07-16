@@ -258,6 +258,17 @@ function updatePlotlyTheme(theme) {
     }, [2]).catch(() => { });
 }
 
+function markdownParse(text) {
+    if (typeof marked !== 'undefined') {
+        if (typeof marked.parse === 'function') {
+            return marked.parse(text);
+        } else if (typeof marked === 'function') {
+            return marked(text);
+        }
+    }
+    return text.replace(/\n/g, '<br>');
+}
+
 async function init() {
     try {
         // Theme initialization
@@ -607,7 +618,30 @@ async function init() {
 
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');
+        const resultsList = document.getElementById('search-results-list');
+        const aiContainer = document.getElementById('ai-answer-container');
+        const aiBody = document.getElementById('ai-answer-body');
+        const aiStatus = document.getElementById('ai-status');
+        const aiSourcesList = document.getElementById('ai-sources-list');
+        const submitBtn = document.getElementById('search-submit-btn');
+        const ragToggleBtn = document.getElementById('rag-toggle-btn');
+        
         let searchTimeout;
+        let isRagMode = false;
+        let ragAbortController = null;
+
+        if (ragToggleBtn) {
+            ragToggleBtn.addEventListener('click', function () {
+                isRagMode = !isRagMode;
+                this.classList.toggle('active', isRagMode);
+                if (aiContainer) aiContainer.style.display = 'none';
+                if (resultsList) resultsList.innerHTML = '';
+                if (ragAbortController) {
+                    ragAbortController.abort();
+                    ragAbortController = null;
+                }
+            });
+        }
 
         if (searchInput && searchResults) {
             searchInput.addEventListener('input', function () {
@@ -616,20 +650,30 @@ async function init() {
 
                 if (!query) {
                     searchResults.classList.remove('active');
-                    searchResults.innerHTML = '';
+                    if (resultsList) resultsList.innerHTML = '';
+                    if (aiContainer) aiContainer.style.display = 'none';
+                    if (ragAbortController) {
+                        ragAbortController.abort();
+                        ragAbortController = null;
+                    }
                     resetView();
+                    return;
+                }
+
+                if (isRagMode) {
+                    // RAG 모드일 때는 실시간 검색을 막음
                     return;
                 }
 
                 searchTimeout = setTimeout(async () => {
                     try {
                         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
-                        const data = await response.json();
-
                         if (data.status === 'success' && data.results.length > 0) {
                             displaySearchResults(data.results);
                         } else {
-                            searchResults.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                            if (resultsList) {
+                                resultsList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                            }
                             searchResults.classList.add('active');
                         }
                     } catch (err) {
@@ -639,7 +683,8 @@ async function init() {
             });
 
             function displaySearchResults(results) {
-                searchResults.innerHTML = '';
+                const targetList = resultsList || searchResults;
+                targetList.innerHTML = '';
                 searchResults.classList.add('active');
 
                 const resultPaths = new Set(results.map(res => res.metadata.rel_path));
@@ -660,8 +705,233 @@ async function init() {
                     const title = meta.title || meta.filename;
 
                     item.innerHTML = `
-                        <div class="result-title">${title}</div>
+                        <div class="result-title">
+                            ${title} <span class="result-score-inline">(${score.toFixed(4)})</span>
+                        </div>
                         <div class="result-snippet">${res.snippet || res.text}</div>
+                    `;
+
+                    item.onclick = () => {
+                        const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
+                        if (nodeIndex !== -1) {
+                            highlightNode(nodeIndex);
+                            searchResults.classList.remove('active');
+                        } else {
+                            alert('Graph에서 해당 문서를 찾을 수 없습니다.');
+                        }
+                    };
+
+                    targetList.appendChild(item);
+                });
+
+                if (resultIndices.size > 0) {
+                    activeSearchIndices = resultIndices;
+                    applyGraphVisualState();
+                }
+            }
+
+            const triggerSearch = () => {
+                const query = searchInput.value.trim();
+                if (!query) return;
+
+                if (isRagMode) {
+                    executeRAGSearch(query);
+                } else {
+                    executeNormalSearch(query);
+                }
+            };
+
+            if (submitBtn) {
+                submitBtn.addEventListener('click', triggerSearch);
+            }
+
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    triggerSearch();
+                }
+            });
+
+            async function executeNormalSearch(query) {
+                const targetList = resultsList || searchResults;
+                if (aiContainer) aiContainer.style.display = 'none';
+                searchResults.classList.add('active');
+                targetList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 중...</div>';
+
+                try {
+                    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
+                    const data = await response.json();
+
+                    if (data.status === 'success' && data.results.length > 0) {
+                        displaySearchResults(data.results);
+                    } else {
+                        targetList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                    }
+                } catch (err) {
+                    console.error('Search error:', err);
+                    targetList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 에러가 발생했습니다.</div>';
+                }
+            }
+
+            async function executeRAGSearch(query) {
+                if (ragAbortController) {
+                    ragAbortController.abort();
+                }
+                ragAbortController = new AbortController();
+                const signal = ragAbortController.signal;
+
+                searchResults.classList.add('active');
+                if (aiContainer) aiContainer.style.display = 'block';
+                if (aiBody) aiBody.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 8px 0;">답변 생성 시작 중...</div>';
+                if (aiStatus) {
+                    aiStatus.textContent = '문서 검색 및 답변 생성 중...';
+                    aiStatus.classList.add('loading');
+                }
+                if (aiSourcesList) aiSourcesList.innerHTML = '';
+                if (resultsList) resultsList.innerHTML = '';
+
+                const markdownParse = (text) => {
+                    if (typeof marked !== 'undefined') {
+                        if (typeof marked.parse === 'function') {
+                            return marked.parse(text);
+                        } else if (typeof marked === 'function') {
+                            return marked(text);
+                        }
+                    }
+                    return text;
+                };
+
+                try {
+                    const response = await fetch(`/api/rag?q=${encodeURIComponent(query)}&k=5`, { signal });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    let fullAnswerText = '';
+                    let matchedMetadata = [];
+                    let isStreamDone = false;
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            const cleanedLine = line.trim();
+                            if (!cleanedLine) continue;
+
+                            const dataIndex = cleanedLine.indexOf('data:');
+                            if (dataIndex === -1) continue;
+
+                            const dataStr = cleanedLine.substring(dataIndex + 5).trim();
+                            if (dataStr === '[DONE]') {
+                                isStreamDone = true;
+                                break;
+                            }
+
+                            try {
+                                const payload = JSON.parse(dataStr);
+                                if (payload.type === 'metadata') {
+                                    matchedMetadata = payload.results;
+                                    displayRAGMetadata(matchedMetadata);
+                                } else if (payload.type === 'content') {
+                                    fullAnswerText += payload.text;
+                                    if (aiBody) {
+                                        try {
+                                            aiBody.innerHTML = markdownParse(fullAnswerText);
+                                            if (typeof renderMathInElement === 'function') {
+                                                renderMathInElement(aiBody, {
+                                                    delimiters: [
+                                                        {left: '$$', right: '$$', display: true},
+                                                        {left: '$', right: '$', display: false},
+                                                        {left: '\\(', right: '\\)', display: false},
+                                                        {left: '\\[', right: '\\]', display: true}
+                                                    ],
+                                                    throwOnError: false
+                                                });
+                                            }
+                                        } catch (renderErr) {
+                                            console.error('Render error:', renderErr);
+                                            aiBody.innerHTML = `<div style="color: #ff6b6b; font-size:0.85rem; padding: 8px; border: 1px solid #ff6b6b; background: rgba(255, 107, 107, 0.05);">렌더링 오류: ${renderErr.message}</div>`;
+                                            if (aiStatus) {
+                                                aiStatus.textContent = '렌더링 오류';
+                                                aiStatus.classList.remove('loading');
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('SSE JSON parse error:', e, dataStr);
+                                if (aiBody) {
+                                    aiBody.innerHTML = `<div style="color: #ff6b6b; font-size:0.85rem; padding: 8px; border: 1px solid #ff6b6b; background: rgba(255, 107, 107, 0.05); margin-top: 8px;">
+                                        오류 발생: ${e.message}<br>
+                                        <small style="color: var(--text-secondary);">Data: ${dataStr}</small>
+                                    </div>`;
+                                    if (aiStatus) {
+                                        aiStatus.textContent = '오류 발생';
+                                        aiStatus.classList.remove('loading');
+                                    }
+                                }
+                            }
+                        }
+                        if (isStreamDone) break;
+                    }
+
+                    if (aiStatus && !signal.aborted) {
+                        aiStatus.textContent = '답변 완료';
+                        aiStatus.classList.remove('loading');
+                    }
+                    renderSourceChips(matchedMetadata);
+
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        console.log('RAG search aborted');
+                        return;
+                    }
+                    console.error('RAG Search Error:', err);
+                    if (aiStatus) {
+                        aiStatus.textContent = '에러 발생';
+                        aiStatus.classList.remove('loading');
+                    }
+                    if (aiBody) {
+                        aiBody.innerHTML = `<div style="color: #ff6b6b; font-size: 0.85rem; padding: 8px; border: 1px solid #ff6b6b; background: rgba(255, 107, 107, 0.05);">답변 생성에 실패했습니다. (Error: ${err.message})</div>`;
+                    }
+                }
+            }
+
+            function displayRAGMetadata(results) {
+                if (resultsList) resultsList.innerHTML = '';
+
+                const resultPaths = new Set(results.map(res => res.metadata.rel_path));
+                const resultIndices = new Set();
+
+                globalNodes.forEach((node, i) => {
+                    if (resultPaths.has(node.metadata.rel_path)) {
+                        resultIndices.add(i);
+                    }
+                });
+
+                if (resultIndices.size > 0) {
+                    activeSearchIndices = resultIndices;
+                    applyGraphVisualState();
+                }
+
+                results.forEach(res => {
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    const meta = res.metadata;
+                    const score = res.score;
+                    const title = meta.title || meta.filename;
+
+                    item.innerHTML = `
+                        <div class="result-title">${title}</div>
+                        <div class="result-snippet">${res.snippet || ''}</div>
                         <div class="result-meta">
                             <div class="result-score">Similarity: ${score.toFixed(4)}</div>
                         </div>
@@ -677,17 +947,43 @@ async function init() {
                         }
                     };
 
-                    searchResults.appendChild(item);
+                    if (resultsList) resultsList.appendChild(item);
                 });
+            }
 
-                if (resultIndices.size > 0) {
-                    activeSearchIndices = resultIndices;
-                    applyGraphVisualState();
+            function renderSourceChips(results) {
+                if (!aiSourcesList) return;
+                aiSourcesList.innerHTML = '';
+
+                if (!results || results.length === 0) {
+                    aiSourcesList.innerHTML = '<span style="font-size: 0.72rem; color: var(--text-secondary);">참조 문서 없음</span>';
+                    return;
                 }
+
+                results.forEach(res => {
+                    const meta = res.metadata;
+                    const title = meta.title || meta.filename;
+                    const chip = document.createElement('div');
+                    chip.className = 'ai-source-chip';
+                    chip.textContent = title;
+                    chip.title = meta.rel_path;
+
+                    chip.onclick = () => {
+                        const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
+                        if (nodeIndex !== -1) {
+                            highlightNode(nodeIndex);
+                            searchResults.classList.remove('active');
+                        } else {
+                            alert('Graph에서 해당 문서를 찾을 수 없습니다.');
+                        }
+                    };
+
+                    aiSourcesList.appendChild(chip);
+                });
             }
 
             document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                if (!searchInput.contains(e.target) && !searchResults.contains(e.target) && (!submitBtn || !submitBtn.contains(e.target))) {
                     searchResults.classList.remove('active');
                 }
             });
@@ -1023,16 +1319,16 @@ async function highlightNode(index) {
             return id;
         });
 
-        let renderedHtml = marked.parse(processedContent);
+        let renderedHtml = markdownParse(processedContent);
 
         // Convert GFM alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
-        // Supports both multiline and inline (> [!NOTE] > content) formats under a unified regex
+        // Supports both multiline and inline formats under a unified regex, allowing bold tags around alert type
         renderedHtml = renderedHtml.replace(
-            /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:(?:&gt;|>)\s*)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
+            /<blockquote>\s*<p>(?:<strong>|<b>)?\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<\/strong>|<\/b>)?\s*(?:(?:&gt;|>)\s*)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
             (match, type, content) => {
                 const t = type.toUpperCase();
-                const icons = { NOTE: 'ℹ️', TIP: '💡', IMPORTANT: '❗', WARNING: '⚠️', CAUTION: '🔴' };
-                return `<div class="gfm-alert gfm-alert-${t.toLowerCase()}"><p class="gfm-alert-title">${icons[t] || ''} ${t}</p><p>${content.trim()}</p></div>`;
+                const icons = { NOTE: '[INFO]', TIP: '[TIP]', IMPORTANT: '[IMPORTANT]', WARNING: '[WARNING]', CAUTION: '[CAUTION]' };
+                return `<div class="gfm-alert gfm-alert-${t.toLowerCase()}"><p class="gfm-alert-title">${icons[t] || t}</p><p>${content.trim()}</p></div>`;
             }
         );
 
