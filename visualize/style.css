@@ -870,20 +870,19 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     width: 100%;
     max-width: 860px;
     height: 100%;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-    padding-right: 10px;
+    overflow-y: hidden; /* 스크롤 해제 */
+    overflow-x: hidden !important; /* 우측 숨김 영역으로 인한 가로 스크롤 방지 */
 }
 
 .info-panel {
     display: flex;
     flex-direction: column;
+    height: 100%; /* 고정 높이 */
     background-color: var(--bg-color);
 }
 
 .info-header {
-    position: sticky;
-    top: 0;
+    position: relative; /* sticky 해제 */
     background-color: var(--bg-color);
     z-index: 10;
     display: flex;
@@ -894,6 +893,7 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--divider);
     margin-bottom: 1.5rem;
+    flex-shrink: 0; /* 헤더 영역 보존 */
 }
 
 .info-header-left {
@@ -935,6 +935,125 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     color: var(--text-primary);
 }
 
+.toc-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 180px; /* Push down to align with body start and clear the sticky header */
+    margin-top: 1.5rem; /* Better visual alignment with the top of content */
+    max-height: calc(100vh - 240px);
+    overflow-y: auto;
+    padding-left: 1rem;
+    /* Soft border on the left to contain TOC guidelines */
+    border-left: 1px solid var(--divider);
+    align-self: flex-start; /* Keep original height for sticky bounds */
+}
+
+/* Dropdown TOC Styles */
+.toc-dropdown {
+    position: relative;
+    width: 100%;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    background: var(--panel-bg);
+    overflow: visible;
+}
+
+.toc-dropdown-btn {
+    width: 100%;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s ease;
+}
+
+.toc-dropdown-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 24px);
+    display: inline-block;
+}
+
+.toc-dropdown-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.toc-dropdown-btn svg {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.toc-dropdown.open .toc-dropdown-btn svg {
+    transform: rotate(180deg);
+}
+
+.toc-dropdown-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: -1px;
+    right: -1px;
+    background: var(--panel-bg);
+    border: 1px solid var(--divider);
+    border-top: none;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.toc-dropdown.open .toc-dropdown-content {
+    display: block;
+}
+
+.toc-dropdown-list {
+    list-style: none;
+    padding: 8px 0;
+    margin: 0;
+}
+
+.toc-dropdown-item {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    line-height: 1.4;
+}
+
+.toc-dropdown-item:hover {
+    background-color: var(--hover-bg);
+    color: var(--accent-color);
+}
+
+.toc-dropdown-item.active {
+    color: var(--accent-color);
+    font-weight: 600;
+    background-color: var(--hover-bg);
+}
+
+.toc-dropdown-item-h3 {
+    font-weight: 500;
+}
+
+.toc-dropdown-item-h4 {
+    padding-left: 28px;
+    font-size: 0.8rem;
+}
+
 .info-header-right {
     display: flex;
     flex-direction: column;
@@ -965,44 +1084,89 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
 }
 
 .info-body {
-    display: flex;
-    flex-direction: row;
-    gap: 2.5rem;
-    align-items: flex-start;
-    position: relative; /* Bounding context for position: sticky */
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    z-index: 20;
+    display: block;
+    height: calc(100% - 100px); /* 헤더 영역 제외 높이 고정 */
+    overflow-x: hidden; /* 우측 임시 숨김 영역으로 인한 가로 스크롤 방지 */
 }
 
-.info-body-left {
-    flex: 1;
-    min-width: 0;
+.info-body-content {
+    height: 100%;
+    overflow-y: auto; /* 본문 스크롤 영역으로 지정 */
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--card-border) transparent;
 }
 
 .toc-sidebar {
-    width: 200px;
-    flex-shrink: 0;
-    position: sticky;
-    top: 180px; /* Push down to align with body start and clear the sticky header */
-    margin-top: 1.5rem; /* Better visual alignment with the top of content */
-    max-height: calc(100vh - 240px);
-    overflow-y: auto;
-    padding-left: 1rem;
-    /* Soft border on the left to contain TOC guidelines */
-    border-left: 1px solid var(--divider);
-    align-self: flex-start; /* Keep original height for sticky bounds */
+    position: absolute;
+    right: 0;
+    top: 24px;
+    width: 32px; /* 평상시 얇은 세로 감지 띠 역할 수행 */
+    height: calc(100% - 48px);
+    background: transparent;
+    z-index: 100; /* 본문 내용 최상위 레이어로 얹힘 */
+    overflow: visible; /* 자식인 .toc-list 가 밖으로 튀어나와 렌더링되게 허용 */
+    transition: width 0.25s ease;
 }
 
+.toc-sidebar:hover {
+    width: 260px; /* 호버 시 감지 프레임 영역을 확장하여 마우스 조작 반경 확보 */
+}
 
+.toc-sidebar::after {
+    content: '';
+    position: absolute;
+    left: 12px; /* 32px 프레임 중앙부 부근에 정렬 */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 40px;
+    background-color: var(--text-secondary);
+    opacity: 0.4;
+    border-radius: 2px;
+    transition: opacity 0.2s ease;
+}
+
+.toc-sidebar:hover::after {
+    opacity: 0; /* 열렸을 때는 핸들 숨김 */
+}
 
 .toc-list {
     list-style: none;
-    padding: 0;
+    padding: 1.2rem;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    
+    /* 카드 비주얼 속성을 자식으로 통째로 이관 */
+    position: absolute;
+    right: -240px; /* 평소에는 프레임 바깥으로 완전히 대피하여 숨김 */
+    top: 0;
+    width: 220px;
+    max-height: 100%;
+    background: var(--panel-bg);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+    
+    opacity: 0; /* 접혔을 때는 카드 불투명도 및 글자 숨김 */
+    transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease,
+                box-shadow 0.25s ease;
+}
+
+.toc-sidebar:hover .toc-list {
+    right: 12px; /* 호버 시 260px 프레임 안쪽으로 스르륵 진입 */
+    opacity: 0.98;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
 
 .toc-item {
@@ -1336,14 +1500,16 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
         position: relative; /* Base context for absolute positioning */
     }
 
-    .info-body-left {
+    .info-body-content {
         width: 100%;
+        padding-right: 0 !important;
     }
 
-    /* 모바일 환경에서는 목차(TOC) 기능 제거 */
-    .toc-toggle-btn {
-        display: none !important;
+    .toc-dropdown {
+        display: block !important;
     }
+
+    /* 모바일 환경에서는 사이드바 제거 */
 
     .toc-sidebar {
         display: none !important;

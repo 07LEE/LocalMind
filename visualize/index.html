@@ -141,7 +141,17 @@
                 </header>
                 
                 <div class="info-body">
-                    <div class="info-body-left">
+                    <div class="info-body-content">
+                        <!-- Dropdown TOC for mobile/narrow views or when sidebar is hidden -->
+                        <div class="toc-dropdown" id="toc-dropdown" style="display: none;">
+                            <button class="toc-dropdown-btn" id="toc-dropdown-btn" aria-label="목차 열기">
+                                <span>목차</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="toc-dropdown-content" id="toc-dropdown-content">
+                                <ul class="toc-dropdown-list" id="toc-dropdown-list"></ul>
+                            </div>
+                        </div>
                         <div class="info-content" id="info-content">
                             문서 내용을 로드 중입니다...
                         </div>

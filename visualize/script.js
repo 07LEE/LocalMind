@@ -302,6 +302,23 @@ async function init() {
         if (themeToggle) themeToggle.addEventListener('click', handleThemeToggle);
         if (themeToggleMobile) themeToggleMobile.addEventListener('click', handleThemeToggle);
 
+        // --- TOC Layout Control Setup ---
+        const tocDropdown = document.getElementById('toc-dropdown');
+        const tocDropdownBtn = document.getElementById('toc-dropdown-btn');
+
+        if (tocDropdownBtn && tocDropdown) {
+            tocDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tocDropdown.classList.toggle('open');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (tocDropdown.classList.contains('open') && !tocDropdown.contains(e.target)) {
+                    tocDropdown.classList.remove('open');
+                }
+            });
+        }
+
         // --- Markdown Setup ---
         marked.use({
             hooks: {
@@ -1384,27 +1401,51 @@ async function highlightNode(index) {
         const headers = infoContentEl.querySelectorAll('h3, h4');
         const tocList = document.getElementById('toc-list');
         const tocSidebar = document.getElementById('toc-sidebar');
+        const tocDropdown = document.getElementById('toc-dropdown');
+        const tocDropdownList = document.getElementById('toc-dropdown-list');
+        const tocDropdownBtn = document.getElementById('toc-dropdown-btn');
         const docView = document.getElementById('doc-view');
 
         // Clean up previous scroll listener
-        if (docView && currentScrollSpyHandler) {
-            docView.removeEventListener('scroll', currentScrollSpyHandler);
+        const infoBodyContent = document.querySelector('.info-body-content');
+        if (infoBodyContent && currentScrollSpyHandler) {
+            infoBodyContent.removeEventListener('scroll', currentScrollSpyHandler);
             currentScrollSpyHandler = null;
         }
 
         tocList.innerHTML = '';
+        if (tocDropdownList) tocDropdownList.innerHTML = '';
+
+        // Reset dropdown button text
+        if (tocDropdownBtn) {
+            const textSpan = tocDropdownBtn.querySelector('span');
+            if (textSpan) textSpan.textContent = '목차';
+        }
+
+
 
         if (headers.length === 0) {
-            tocSidebar.style.display = 'none';
+            if (tocSidebar) tocSidebar.style.display = 'none';
+            if (tocDropdown) tocDropdown.style.display = 'none';
         } else {
-            tocSidebar.style.display = 'block';
+            // Responsive visibility based on viewport size (900px breakpoint)
+            if (window.innerWidth <= 900) {
+                if (tocSidebar) tocSidebar.style.display = 'none';
+                if (tocDropdown) tocDropdown.style.display = 'block';
+            } else {
+                if (tocSidebar) tocSidebar.style.display = 'block';
+                if (tocDropdown) tocDropdown.style.display = 'none';
+            }
+
             const headerElements = Array.from(headers);
             const tocItems = [];
+            const tocDropdownItems = [];
 
             headerElements.forEach((header, idx) => {
                 const headerId = `toc-section-${idx}`;
                 header.id = headerId;
 
+                // Sidebar TOC item
                 const li = document.createElement('li');
                 li.className = `toc-item toc-item-${header.tagName.toLowerCase()}`;
                 li.textContent = header.textContent;
@@ -1419,12 +1460,28 @@ async function highlightNode(index) {
 
                 tocList.appendChild(li);
                 tocItems.push(li);
+
+                // Dropdown TOC item
+                if (tocDropdownList) {
+                    const dropLi = document.createElement('li');
+                    dropLi.className = `toc-dropdown-item toc-dropdown-item-${header.tagName.toLowerCase()}`;
+                    dropLi.textContent = header.textContent;
+
+                    dropLi.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        if (tocDropdown) tocDropdown.classList.remove('open');
+                    });
+
+                    tocDropdownList.appendChild(dropLi);
+                    tocDropdownItems.push(dropLi);
+                }
             });
 
             // Notion-like Scroll Spy Implementation
             const handleScrollSpy = () => {
                 let activeIndex = 0;
-                const scrollContainerTop = docView.getBoundingClientRect().top;
+                const scrollContainerTop = infoBodyContent ? infoBodyContent.getBoundingClientRect().top : 0;
 
                 for (let i = 0; i < headerElements.length; i++) {
                     const rect = headerElements[i].getBoundingClientRect();
@@ -1443,11 +1500,26 @@ async function highlightNode(index) {
                         li.classList.remove('active');
                     }
                 });
+
+                tocDropdownItems.forEach((li, idx) => {
+                    if (idx === activeIndex) {
+                        li.classList.add('active');
+                        // 드롭다운 버튼의 텍스트를 현재 활성화된 섹션명으로 업데이트
+                        if (tocDropdownBtn) {
+                            const textSpan = tocDropdownBtn.querySelector('span');
+                            if (textSpan) textSpan.textContent = headerElements[idx].textContent;
+                        }
+                    } else {
+                        li.classList.remove('active');
+                    }
+                });
             };
 
             // Register scroll observer
-            docView.addEventListener('scroll', handleScrollSpy);
-            currentScrollSpyHandler = handleScrollSpy;
+            if (infoBodyContent) {
+                infoBodyContent.addEventListener('scroll', handleScrollSpy);
+                currentScrollSpyHandler = handleScrollSpy;
+            }
 
             // Trigger once initially to highlight the top section
             handleScrollSpy();
@@ -1591,9 +1663,9 @@ function resetView() {
         document.getElementById('doc-view').style.display = 'none';
 
         // Clear Scroll Spy Handler
-        const docView = document.getElementById('doc-view');
-        if (docView && currentScrollSpyHandler) {
-            docView.removeEventListener('scroll', currentScrollSpyHandler);
+        const infoBodyContent = document.querySelector('.info-body-content');
+        if (infoBodyContent && currentScrollSpyHandler) {
+            infoBodyContent.removeEventListener('scroll', currentScrollSpyHandler);
             currentScrollSpyHandler = null;
         }
 
