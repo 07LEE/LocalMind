@@ -42,6 +42,8 @@ def scan_posts(posts_dir, min_count=5):
     for root, _, files in os.walk(posts_dir):
         for file in files:
             if file.endswith('.md'):
+                if file.lower().startswith('readme'):
+                    continue
                 file_count += 1
                 file_path = os.path.join(root, file)
                 try:
