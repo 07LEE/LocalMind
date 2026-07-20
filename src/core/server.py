@@ -264,12 +264,6 @@ def search():
         return jsonify({"results": []})
         
     try:
-        # Lazy load models if they are not loaded yet
-        if not hasattr(db, 'models_loaded') or not db.models_loaded:
-            print("LOGE: [Server] Lazy-loading models on first search request...")
-            db.pre_load_models()
-            db.models_loaded = True
-
         # Increase initial k for hybrid search before reranking
         initial_k = max(top_k * 2, 5)
         results = db.search_hybrid(query, top_k=initial_k)
@@ -305,12 +299,6 @@ def rag_search():
         return jsonify({"error": "Query is required"}), 400
         
     try:
-        # Lazy load models if they are not loaded yet
-        if not hasattr(db, 'models_loaded') or not db.models_loaded:
-            print("LOGE: [Server] Lazy-loading models on first search request...")
-            db.pre_load_models()
-            db.models_loaded = True
-
         # Perform hybrid search for context
         initial_k = max(top_k * 2, 5)
         results = db.search_hybrid(query, top_k=initial_k)
