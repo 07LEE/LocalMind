@@ -35,7 +35,7 @@ class DenseIndex:
             self.model = SentenceTransformer(self.model_name, device=device)
 
     def embed(self, texts, batch_size=32):
-        """Calculates normalized embeddings for a list of texts.
+        """Calculates normalized embeddings for a list of texts using optimized SentenceTransformer pipeline.
 
         Args:
             texts (list[str]): List of texts to embed.
@@ -46,10 +46,14 @@ class DenseIndex:
         """
         self._load_model()
         with torch.inference_mode():
-            embeddings = self.model.encode(texts, batch_size=batch_size, show_progress_bar=False)
-        # L2 Normalization for cosine similarity
-        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-        return embeddings / (norms + 1e-10)
+            embeddings = self.model.encode(
+                texts,
+                batch_size=batch_size,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=True
+            )
+        return embeddings.astype('float32')
 
     def _build_index(self):
         """Builds or rebuilds the FAISS index from the current internal vectors.
