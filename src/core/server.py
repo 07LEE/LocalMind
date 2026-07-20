@@ -291,7 +291,13 @@ def rag_search():
                 ]
             }
             yield f"data: {json.dumps(meta_payload)}\n\n"
-            
+
+            if prompt is None:
+                rejection_msg = "죄송합니다. 제공된 컨텍스트 외의 질문이나 시스템 지시사항을 무시하라는 요청은 수행할 수 없습니다."
+                yield f"data: {json.dumps({'type': 'content', 'text': rejection_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
             # Stream response content from Ollama
             full_response = ""
             for token in client.generate_stream(prompt):
