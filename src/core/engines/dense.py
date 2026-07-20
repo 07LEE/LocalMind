@@ -54,28 +54,32 @@ class DenseIndex:
     def _build_index(self):
         """Builds or rebuilds the FAISS index from the current internal vectors.
 
-        This is an internal method called whenever the vector pool changes.
-        It uses IndexFlatIP to support cosine similarity on normalized vectors.
+        Uses IndexIDMap2 over IndexFlatIP to support ID-based removal and differential updates.
         """
         with self.lock:
-            if self.vectors is None:
+            if self.vectors is None or len(self.vectors) == 0:
                 self.index = None
                 return
 
             dimension = self.vectors.shape[1]
-            # Using IndexFlatIP (Inner Product) for cosine similarity on normalized vectors
-            cpu_index = faiss.IndexFlatIP(dimension)
-            if torch.cuda.is_available():
-                try:
-                    res = faiss.StandardGpuResources()
-                    res.setTempMemory(64 * 1024 * 1024)
-                    self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
-                except Exception as e:
-                    print(f"LOGE: [DenseIndex] Failed to convert FAISS index to GPU: {e}")
-                    self.index = cpu_index
-            else:
-                self.index = cpu_index
-            self.index.add(self.vectors.astype('float32'))
+            base_index = faiss.IndexFlatIP(dimension)
+            id_index = faiss.IndexIDMap2(base_index)
+
+            ids = np.arange(len(self.vectors), dtype=np.int64)
+            id_index.add_with_ids(self.vectors.astype('float32'), ids)
+            self.index = id_index
+
+    def remove_ids(self, ids_to_remove):
+        """Removes specific vector IDs from the FAISS index without a full rebuild.
+
+        Args:
+            ids_to_remove (list[int]): List of vector indices to remove.
+        """
+        with self.lock:
+            if self.index is None or not ids_to_remove:
+                return
+            ids_arr = np.array(ids_to_remove, dtype=np.int64)
+            self.index.remove_ids(ids_arr)
 
     def add_vectors(self, new_vectors):
         """Adds pre-calculated vectors to the index and updates the search index.
