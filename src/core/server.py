@@ -13,8 +13,9 @@ sys.path.append(os.path.join(BASE_DIR, "src"))
 from cli.indexer import index_markdown_files
 from tools.scan_keywords import scan_posts
 from viz.extract_viz_data import extract_visualization_data
-from core.config import DB_DEFAULT_PATH, POSTS_DIR
-from core.vector_db import SimpleVectorDB
+from core.config import DB_DEFAULT_PATH, POSTS_DIR, RAG_RELEVANCE_THRESHOLD
+from core.vector_db import SimpleVectorDB, clean_markdown
+from core.llm import OllamaClient
 
 app = Flask(__name__)
 CORS(app)
@@ -29,6 +30,19 @@ sync_lock = threading.Lock()
 sync_status = "idle"  # States: "idle", "processing", "error: <msg>"
 
 # Models will be lazy-loaded on the first search request
+
+
+def _deduplicate(results, top_k):
+    """Deduplicates results by rel_path and limits to top_k."""
+    unique, seen = [], set()
+    for res in results:
+        path = res["metadata"].get("rel_path")
+        if path not in seen:
+            unique.append(res)
+            seen.add(path)
+            if len(unique) >= top_k:
+                break
+    return unique
 
 def log_unknown_query_if_needed(query, response_text):
     """지식 부재(답변 불가능) 질문을 data/unknown_queries.json에 기록합니다."""
@@ -201,25 +215,15 @@ def search():
             db.pre_load_models()
             db.models_loaded = True
 
-        from core.vector_db import clean_markdown
         # Increase initial k for hybrid search before reranking
         initial_k = max(top_k * 2, 5)
         results = db.search_hybrid(query, top_k=initial_k)
-        
+
         if rerank and len(results) > 1:
             results = db.rerank(query, results)
-            
-        # Deduplicate and limit to top_k
-        unique_results = []
-        seen_paths = set()
-        for res in results:
-            path = res["metadata"].get("rel_path")
-            if path not in seen_paths:
-                unique_results.append(res)
-                seen_paths.add(path)
-                if len(unique_results) >= top_k:
-                    break
-        
+
+        unique_results = _deduplicate(results, top_k)
+
         for res in unique_results:
             res["snippet"] = clean_markdown(res["text"])
 
@@ -234,13 +238,14 @@ def search():
             "message": str(e)
         }), 500
 
-@app.route('/api/rag', methods=['GET'])
+@app.route('/api/answers', methods=['POST'])
 def rag_search():
     """API endpoint for RAG (Retrieval-Augmented Generation) search with SSE streaming."""
-    query = request.args.get('q', '')
-    top_k = int(request.args.get('k', 5))
-    rerank = request.args.get('rerank', 'true').lower() == 'true'
-    
+    body = request.get_json(silent=True) or {}
+    query = body.get('query', '')
+    top_k = int(body.get('k', 5))
+    rerank = body.get('rerank', True)
+
     if not query:
         return jsonify({"error": "Query is required"}), 400
         
@@ -258,22 +263,17 @@ def rag_search():
         if rerank and len(results) > 1:
             results = db.rerank(query, results)
             
-        # Deduplicate and limit to top_k
-        unique_results = []
-        seen_paths = set()
-        for res in results:
-            path = res["metadata"].get("rel_path")
-            if path not in seen_paths:
-                unique_results.append(res)
-                seen_paths.add(path)
-                if len(unique_results) >= top_k:
-                    break
-        
-        from core.vector_db import clean_markdown
+        unique_results = _deduplicate(results, top_k)
+
         for res in unique_results:
             res["snippet"] = clean_markdown(res["text"])
 
-        from core.llm import OllamaClient
+        # Filter out low-relevance results below rerank score threshold
+        unique_results = [
+            res for res in unique_results
+            if res.get("rerank_score", res.get("score", 0)) >= RAG_RELEVANCE_THRESHOLD
+        ]
+
         client = OllamaClient()
         prompt = client.build_rag_prompt(query, unique_results)
 

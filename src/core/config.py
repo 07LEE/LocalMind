@@ -61,3 +61,6 @@ CHUNKING_OVERLAP = int(os.getenv("THOUGHT_SEARCH_OVERLAP", "200"))
 # Ollama LLM Configuration for RAG
 OLLAMA_HOST = os.getenv("THOUGHT_SEARCH_OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("THOUGHT_SEARCH_OLLAMA_MODEL", "qwen2.5-coder:14b")
+
+# RAG relevance threshold for filtering low-quality search results
+RAG_RELEVANCE_THRESHOLD = float(os.getenv("THOUGHT_SEARCH_RELEVANCE_THRESHOLD", "0.5"))
