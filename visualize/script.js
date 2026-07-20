@@ -685,6 +685,7 @@ async function init() {
                 searchTimeout = setTimeout(async () => {
                     try {
                         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
+                        const data = await response.json();
                         if (data.status === 'success' && data.results.length > 0) {
                             displaySearchResults(data.results);
                         } else {
@@ -723,7 +724,7 @@ async function init() {
 
                     item.innerHTML = `
                         <div class="result-title">
-                            ${title} <span class="result-score-inline">(${score.toFixed(4)})</span>
+                            ${title} <span class="result-score-inline">(${(score * 100).toFixed(1)}%)</span>
                         </div>
                         <div class="result-snippet">${res.snippet || res.text}</div>
                     `;
@@ -792,6 +793,7 @@ async function init() {
             async function executeRAGSearch(query) {
                 if (ragAbortController) {
                     ragAbortController.abort();
+                    ragAbortController = null;
                 }
                 ragAbortController = new AbortController();
                 const signal = ragAbortController.signal;
@@ -947,11 +949,10 @@ async function init() {
                     const title = meta.title || meta.filename;
 
                     item.innerHTML = `
-                        <div class="result-title">${title}</div>
-                        <div class="result-snippet">${res.snippet || ''}</div>
-                        <div class="result-meta">
-                            <div class="result-score">Similarity: ${score.toFixed(4)}</div>
+                        <div class="result-title">
+                            ${title} <span class="result-score-inline">(${(score * 100).toFixed(1)}%)</span>
                         </div>
+                        <div class="result-snippet">${res.snippet || ''}</div>
                     `;
 
                     item.onclick = () => {
@@ -1654,9 +1655,10 @@ function resetView() {
         const searchResults = document.getElementById('main-search-results');
         if (searchInput) searchInput.value = '';
         if (searchResults) {
-            searchResults.innerHTML = '';
             searchResults.classList.remove('active');
         }
+        const resultsList = document.getElementById('search-results-list');
+        if (resultsList) resultsList.innerHTML = '';
 
         // Show Welcome View & Hide Document Content View
         document.getElementById('welcome-view').style.display = 'block';
