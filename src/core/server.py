@@ -44,7 +44,44 @@ def _deduplicate(results, top_k):
                 break
     return unique
 
-def log_unknown_query_if_needed(query, response_text):
+def get_client_ip():
+    """Extracts client IP considering proxy headers."""
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    return request.remote_addr or "127.0.0.1"
+
+def log_security_event(query, client_ip):
+    """Logs prompt injection or suspicious security attempts to data/security_logs.json."""
+    from datetime import datetime
+    data_dir = os.path.join(BASE_DIR, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    log_file = os.path.join(data_dir, "security_logs.json")
+
+    records = []
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                records = json.load(f)
+                if not isinstance(records, list):
+                    records = []
+        except Exception:
+            records = []
+
+    records.append({
+        "event": "prompt_injection_attempt",
+        "query": query,
+        "client_ip": client_ip,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+
+    try:
+        with open(log_file, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False, indent=2)
+        print(f"LOGI: [Server] Logged security event for IP {client_ip}")
+    except Exception as e:
+        print(f"LOGE: [Server] Failed to write security log: {e}")
+
+def log_unknown_query_if_needed(query, response_text, client_ip="127.0.0.1"):
     """지식 부재(답변 불가능) 질문을 data/unknown_queries.json에 기록합니다."""
     keywords = [
         "정보가 없습니다", 
@@ -83,6 +120,7 @@ def log_unknown_query_if_needed(query, response_text):
         
     new_record = {
         "query": query,
+        "client_ip": client_ip,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "response_snippet": response_text[:100] + "..." if len(response_text) > 100 else response_text
     }
@@ -292,7 +330,10 @@ def rag_search():
             }
             yield f"data: {json.dumps(meta_payload)}\n\n"
 
+            client_ip = get_client_ip()
+
             if prompt is None:
+                log_security_event(query, client_ip)
                 rejection_msg = "죄송합니다. 제공된 컨텍스트 외의 질문이나 시스템 지시사항을 무시하라는 요청은 수행할 수 없습니다."
                 yield f"data: {json.dumps({'type': 'content', 'text': rejection_msg})}\n\n"
                 yield "data: [DONE]\n\n"
@@ -307,9 +348,9 @@ def rag_search():
                     "text": token
                 }
                 yield f"data: {json.dumps(content_payload)}\n\n"
-                
+
             try:
-                log_unknown_query_if_needed(query, full_response)
+                log_unknown_query_if_needed(query, full_response, client_ip)
             except Exception as log_err:
                 print(f"LOGE: [Server] RAG response log error: {log_err}")
                 
