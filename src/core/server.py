@@ -13,7 +13,7 @@ sys.path.append(os.path.join(BASE_DIR, "src"))
 from cli.indexer import index_markdown_files
 from tools.scan_keywords import scan_posts
 from viz.extract_viz_data import extract_visualization_data
-from core.config import DB_DEFAULT_PATH, POSTS_DIR, RAG_RELEVANCE_THRESHOLD
+from core.config import DB_DEFAULT_PATH, POSTS_DIR, RAG_RELEVANCE_THRESHOLD, SYNC_TOKEN
 from core.vector_db import SimpleVectorDB, clean_markdown
 from core.llm import OllamaClient
 
@@ -115,16 +115,22 @@ def log_unknown_query_if_needed(query, response_text, client_ip="127.0.0.1"):
         except Exception:
             records = []
             
-    if records and records[-1].get("query") == query:
-        return
-        
-    new_record = {
-        "query": query,
-        "client_ip": client_ip,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "response_snippet": response_text[:100] + "..." if len(response_text) > 100 else response_text
-    }
-    records.append(new_record)
+    normalized_query = query.strip().lower()
+    existing_record = next((r for r in records if r.get("query", "").strip().lower() == normalized_query), None)
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if existing_record:
+        existing_record["count"] = existing_record.get("count", 1) + 1
+        existing_record["timestamp"] = now_str
+        existing_record["client_ip"] = client_ip
+    else:
+        records.append({
+            "query": query,
+            "client_ip": client_ip,
+            "count": 1,
+            "timestamp": now_str,
+            "response_snippet": response_text[:100] + "..." if len(response_text) > 100 else response_text
+        })
     
     try:
         with open(log_file, "w", encoding="utf-8") as f:
@@ -203,6 +209,17 @@ def serve_visualize(path):
 def sync_db():
     """API endpoint to trigger asynchronous manual re-indexing and data extraction."""
     global sync_status
+    if SYNC_TOKEN:
+        auth_header = request.headers.get("Authorization", "")
+        token_header = request.headers.get("X-Sync-Token", "")
+        provided_token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else token_header
+        if provided_token != SYNC_TOKEN:
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    else:
+        client_ip = get_client_ip()
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            return jsonify({"status": "error", "message": "Forbidden: Sync requires local request or THOUGHT_SEARCH_SYNC_TOKEN"}), 403
+
     try:
         with sync_lock:
             if sync_status == "processing":
