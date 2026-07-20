@@ -200,10 +200,6 @@ def serve_posts(path):
     """Serve files from the posts directory."""
     return send_from_directory(POSTS_DIR, path)
 
-@app.route('/<path:path>')
-def serve_visualize(path):
-    """Serve static files from the visualize directory."""
-    return send_from_directory(os.path.join(BASE_DIR, 'visualize'), path)
 
 @app.route('/api/sync', methods=['POST'])
 def sync_db():
@@ -368,6 +364,13 @@ def rag_search():
             "status": "error",
             "message": str(e)
         }), 500
+
+@app.route('/<path:path>')
+def serve_visualize(path):
+    """Serve static files from the visualize directory."""
+    if path.startswith('api/'):
+        return jsonify({"error": "Not Found"}), 404
+    return send_from_directory(os.path.join(BASE_DIR, 'visualize'), path)
 
 
 if __name__ == '__main__':
