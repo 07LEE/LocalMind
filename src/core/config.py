@@ -34,14 +34,12 @@ else:
 
 
 # Database Pathing
-DB_DEFAULT_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "thought-search-db.json"
-)
+DB_DEFAULT_PATH = str(BASE_DIR / "data" / "thought-search-db.json")
 
 # Posts Directory (can be overridden by environment variable)
 POSTS_DIR = os.getenv(
     "THOUGHT_SEARCH_POSTS",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "posts")
+    str(BASE_DIR / "posts")
 )
 
 # Indexing Configuration
