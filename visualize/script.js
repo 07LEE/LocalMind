@@ -820,7 +820,12 @@ async function init() {
                 };
 
                 try {
-                    const response = await fetch(`/api/rag?q=${encodeURIComponent(query)}&k=5`, { signal });
+                    const response = await fetch('/api/answers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query, k: 5 }),
+                        signal
+                    });
 
                     if (!response.ok) {
                         throw new Error(`Server error: ${response.status}`);
@@ -858,7 +863,7 @@ async function init() {
                                 const payload = JSON.parse(dataStr);
                                 if (payload.type === 'metadata') {
                                     matchedMetadata = payload.results;
-                                    displayRAGMetadata(matchedMetadata);
+                                    displaySearchResults(matchedMetadata);
                                 } else if (payload.type === 'content') {
                                     fullAnswerText += payload.text;
                                     if (aiBody) {
@@ -924,50 +929,7 @@ async function init() {
                 }
             }
 
-            function displayRAGMetadata(results) {
-                if (resultsList) resultsList.innerHTML = '';
 
-                const resultPaths = new Set(results.map(res => res.metadata.rel_path));
-                const resultIndices = new Set();
-
-                globalNodes.forEach((node, i) => {
-                    if (resultPaths.has(node.metadata.rel_path)) {
-                        resultIndices.add(i);
-                    }
-                });
-
-                if (resultIndices.size > 0) {
-                    activeSearchIndices = resultIndices;
-                    applyGraphVisualState();
-                }
-
-                results.forEach(res => {
-                    const item = document.createElement('div');
-                    item.className = 'search-result-item';
-                    const meta = res.metadata;
-                    const score = res.score;
-                    const title = meta.title || meta.filename;
-
-                    item.innerHTML = `
-                        <div class="result-title">
-                            ${title} <span class="result-score-inline">(${(score * 100).toFixed(1)}%)</span>
-                        </div>
-                        <div class="result-snippet">${res.snippet || ''}</div>
-                    `;
-
-                    item.onclick = () => {
-                        const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
-                        if (nodeIndex !== -1) {
-                            highlightNode(nodeIndex);
-                            searchResults.classList.remove('active');
-                        } else {
-                            alert('Graph에서 해당 문서를 찾을 수 없습니다.');
-                        }
-                    };
-
-                    if (resultsList) resultsList.appendChild(item);
-                });
-            }
 
             function renderSourceChips(results) {
                 if (!aiSourcesList) return;
@@ -1653,16 +1615,17 @@ function resetView() {
         // Clear search values
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');
-        if (searchInput) searchInput.value = '';
-        if (searchResults) {
-            searchResults.classList.remove('active');
-        }
         const resultsList = document.getElementById('search-results-list');
+        const welcomeView = document.getElementById('welcome-view');
+        const docView = document.getElementById('doc-view');
+
+        if (searchInput) searchInput.value = '';
+        if (searchResults) searchResults.classList.remove('active');
         if (resultsList) resultsList.innerHTML = '';
 
         // Show Welcome View & Hide Document Content View
-        document.getElementById('welcome-view').style.display = 'block';
-        document.getElementById('doc-view').style.display = 'none';
+        if (welcomeView) welcomeView.style.display = 'block';
+        if (docView) docView.style.display = 'none';
 
         // Clear Scroll Spy Handler
         const infoBodyContent = document.querySelector('.info-body-content');
