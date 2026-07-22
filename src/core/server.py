@@ -175,7 +175,7 @@ def _run_sync_background():
     except Exception as e:
         print(f"LOGE: [Server] Background sync error: {e}")
         with sync_lock:
-            sync_status = f"error: {str(e)}"
+            sync_status = "error"
 
 @app.after_request
 def add_header(response):
@@ -238,7 +238,7 @@ def sync_db():
         print(f"LOGE: [Server] Sync initiation error: {e}")
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Failed to start sync process."
         }), 500
 
 @app.route('/api/sync/status', methods=['GET'])

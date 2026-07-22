@@ -1104,27 +1104,29 @@ async function init() {
                             if (statusData.status === 'idle') {
                                 clearInterval(pollInterval);
                                 location.reload();
-                            } else if (statusData.status.startsWith('error')) {
+                            } else if (statusData.status === 'error' || statusData.status.startsWith('error')) {
                                 clearInterval(pollInterval);
-                                alert('Sync failed: ' + statusData.status);
+                                console.error('Sync monitoring status error:', statusData.status);
+                                alert('동기화 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
                                 resetSyncButton();
                             }
                         } catch (pollErr) {
                             console.error('Polling error:', pollErr);
                             clearInterval(pollInterval);
-                            alert('An error occurred during sync monitoring.');
+                            alert('동기화 상태 확인 중 오류가 발생했습니다.');
                             resetSyncButton();
                         }
                     }, 2000);
                 } else if (result.status === 'success') {
                     location.reload();
                 } else {
-                    alert('Sync failed: ' + result.message);
+                    console.error('Sync request failed:', result.message);
+                    alert('동기화를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
                     resetSyncButton();
                 }
             } catch (err) {
                 console.error('Sync Error:', err);
-                alert('An error occurred during sync.');
+                alert('동기화 과정에서 오류가 발생했습니다.');
                 resetSyncButton();
             }
         });
