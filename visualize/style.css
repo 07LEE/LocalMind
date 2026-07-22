@@ -944,8 +944,6 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     max-height: calc(100vh - 240px);
     overflow-y: auto;
     padding-left: 1rem;
-    /* Soft border on the left to contain TOC guidelines */
-    border-left: 1px solid var(--divider);
     align-self: flex-start; /* Keep original height for sticky bounds */
 }
 
@@ -1099,6 +1097,7 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    padding-right: 48px; /* 우측 스크롤바 및 TOC 사이드바와의 간격 확보 */
     scrollbar-width: thin;
     scrollbar-color: var(--card-border) transparent;
 }
