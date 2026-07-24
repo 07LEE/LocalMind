@@ -1247,6 +1247,8 @@ async function highlightNode(index) {
             document.getElementById('doc-view').style.display = 'block';
             document.querySelector('.main-content').scrollTop = 0;
             document.getElementById('doc-view').scrollTop = 0;
+            const infoBodyContent = document.querySelector('.info-body-content');
+            if (infoBodyContent) infoBodyContent.scrollTop = 0;
             return;
         }
 
@@ -1544,6 +1546,7 @@ async function highlightNode(index) {
         // Scroll containers to top
         document.querySelector('.main-content').scrollTop = 0;
         document.getElementById('doc-view').scrollTop = 0;
+        if (infoBodyContent) infoBodyContent.scrollTop = 0;
 
     } catch (err) {
         console.error('Highlight error:', err);
