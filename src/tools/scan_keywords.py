@@ -112,7 +112,7 @@ def scan_posts(posts_dir, min_count=5):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find true morphological analysis failures without icons.")
-    parser.add_argument("--dir", default=os.getenv("THOUGHT_SEARCH_POSTS", "posts"), help="Directory to scan")
+    parser.add_argument("--dir", default=os.getenv("LOCAL_MIND_POSTS", os.getenv("THOUGHT_SEARCH_POSTS", "posts")), help="Directory to scan")
     parser.add_argument("--min", type=int, default=5, help="Minimum occurrence count")
     
     args = parser.parse_args()

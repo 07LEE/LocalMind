@@ -339,7 +339,7 @@ if __name__ == "__main__":
     import argparse
     from core.config import DB_DEFAULT_PATH, POSTS_DIR, EXCLUDED_DIRS, EXCLUDED_FILENAMES, SUPPORTED_EXTENSIONS
 
-    parser = argparse.ArgumentParser(description="Thought-Search Markdown Indexer")
+    parser = argparse.ArgumentParser(description="LocalMind Markdown Indexer")
     parser.add_argument("--model", type=str, default=None, help="The embedding model to use.")
     parser.add_argument("--posts", "-p", type=str, default=POSTS_DIR, help="The directory containing markdown files.")
     args = parser.parse_args()

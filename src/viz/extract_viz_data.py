@@ -9,8 +9,15 @@ from collections import Counter
 
 # Path configuration
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.path.join(BASE_DIR, "data", "thought-search-db.json")
-VECTOR_PATH = os.path.join(BASE_DIR, "data", "thought-search-db.vectors.npy")
+import sys
+sys.path.append(os.path.join(BASE_DIR, "src"))
+try:
+    from core.config import DB_DEFAULT_PATH
+    DB_PATH = DB_DEFAULT_PATH
+    VECTOR_PATH = DB_DEFAULT_PATH.replace(".json", ".vectors.npy")
+except ImportError:
+    DB_PATH = os.path.join(BASE_DIR, "data", "localmind-db.json")
+    VECTOR_PATH = os.path.join(BASE_DIR, "data", "localmind-db.vectors.npy")
 OUTPUT_PATH = os.path.join(BASE_DIR, "data", "viz-data.json")
 
 def extract_visualization_data():
