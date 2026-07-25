@@ -214,7 +214,7 @@ def sync_db():
     else:
         client_ip = get_client_ip()
         if client_ip not in ("127.0.0.1", "::1", "localhost"):
-            return jsonify({"status": "error", "message": "Forbidden: Sync requires local request or THOUGHT_SEARCH_SYNC_TOKEN"}), 403
+            return jsonify({"status": "error", "message": "Forbidden: Sync requires local request or LOCAL_MIND_SYNC_TOKEN"}), 403
 
     try:
         with sync_lock:
@@ -377,5 +377,5 @@ def serve_visualize(path):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    print(f"Thought-Search Server starting at http://localhost:{port}")
+    print(f"LocalMind Server starting at http://localhost:{port}")
     app.run(host='0.0.0.0', port=port)

@@ -7,7 +7,7 @@ from core.llm import OllamaClient
 
 def main():
     """Main entry point for the CLI search application."""
-    parser = argparse.ArgumentParser(description="Thought-Search Vector DB Search Engine")
+    parser = argparse.ArgumentParser(description="LocalMind Vector DB Search Engine")
     parser.add_argument(
         "query",
         type=str,

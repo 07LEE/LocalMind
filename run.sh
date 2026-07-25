@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Thought-Search: General Execution Script
+# LocalMind: General Execution Script
 # This script automates environment setup, indexing, and searching.
 
 # 1. Setup path
@@ -15,7 +15,7 @@ YELLOW="\033[33m"
 RESET="\033[0m"
 export PYTHONPATH=$BASE_DIR/src
 
-echo -e "${CYAN}${BOLD}[System] Thought-Search System Initializing...${RESET}"
+echo -e "${CYAN}${BOLD}[System] LocalMind System Initializing...${RESET}"
 
 # 2. Environment Activation
 if [ -n "$VIRTUAL_ENV" ]; then
@@ -36,8 +36,14 @@ else
     done
 
     if [ -n "$CONDA_ACTIVATE" ]; then
-        source "$CONDA_ACTIVATE" thought-search
-        echo -e "${GREEN}[OK] Conda thought-search environment activated via $CONDA_ACTIVATE.${RESET}"
+        # Try localmind conda environment first, fallback to thought-search
+        if conda env list 2>/dev/null | grep -q -E "^localmind[[:space:]]"; then
+            source "$CONDA_ACTIVATE" localmind
+            echo -e "${GREEN}[OK] Conda localmind environment activated via $CONDA_ACTIVATE.${RESET}"
+        else
+            source "$CONDA_ACTIVATE" thought-search
+            echo -e "${GREEN}[OK] Conda thought-search environment activated via $CONDA_ACTIVATE.${RESET}"
+        fi
     else
         echo -e "${YELLOW}[Warning] No virtual environment detected. Proceeding with system python...${RESET}"
     fi

@@ -1,162 +1,164 @@
-# Thought-Search
+# LocalMind
 
-## Features
+LocalMind is a private-first RAG (Retrieval-Augmented Generation) system designed to perform hybrid (vector + keyword) semantic searches and interactive local LLM queries over personal Markdown knowledge bases offline, with 3D knowledge graph visualizations.
 
-### Text Processing & Embedding
+## Architecture and System Flow
 
-- **Semantic Search:** Uses cosine similarity to match query vectors against indexed document chunks.
-- **Hybrid Search:** Combines semantic (Vector) and keyword (BM25) search using Reciprocal Rank Fusion (RRF) for superior accuracy.
-- **Korean Morphological Analysis:** Integrated with `kiwipiepy` (Kiwi) for precise Korean tokenization and particle removal.
-- **Custom Dictionary:** Supports external dictionary management via `Personal-Dictionary` to protect technical terms (e.g., 3DGS, COLMAP).
-- **Markdown Parsing & Search Optimization:** Splits raw `.md` files into paragraph-level chunks for indexing, while stripping formatting noise (such as code blocks, markdown image syntax `![alt](url)`, and simplifying markdown links `[text](url)` to only search their text contents). It also filters out markdown alert tags (e.g. `[!NOTE]`, `[!WARNING]`) to prevent semantic skewing during embedding and keyword analysis.
-- **Local Embedding:** Generates text embeddings locally using a configurable `sentence-transformers` model.
-- **Hierarchical Support:** Recursively searches for markdown files in subdirectories.
-- **Category Extraction:** Automatically extracts folder names from the directory structure and stores them as `categories` metadata.
-- **3D Knowledge Graph:** Interactive 3D visualization of semantic relationships between documents using UMAP dimensionality reduction and Plotly.js.
-- **Local LLM RAG:** Integrates with a local Ollama service (defaulting to `qwen2.5-coder:14b`) to generate context-aware answers in Korean based on retrieved document context.
+```mermaid
+graph TD
+    RawDocs[Personal Markdown Documents] --> Parser[Markdown Parser]
+    Parser --> Chunking[Paragraph Chunks]
+    
+    subgraph Indexing [Hybrid Indexing Engine]
+        Embedder[SentenceTransformers Dense Vector]
+        BM25[Morphological Analyzer Sparse Keyword]
+    end
 
-### Architecture & Storage
-
-- **Offline Execution:** All inference and processing are done locally without external API dependencies.
-- **Read-Only Access:** The application only reads markdown files and does not modify the original data.
-- **Hybrid Storage:** Stores metadata in JSON and high-dimensional vectors in a binary NumPy (`.npy`) file for performance.
-- **Flexible Data Sources:** Supports a default `posts/` directory (can be a Git submodule) or any external path via environment variables.
-
----
-
-## Data Requirements
-
-### Input Format
-
-- **Format:** Markdown (`*.md`)
-- **Source Directory:** Target files can be in the `[REDACTED]/` directory or any subfolder within it.
-- **Mandatory Metadata:** Every file must start with a YAML Frontmatter block to be indexed successfully:
-
-```yaml
----
-title: "Your Document Title"
-date: "YYYY-MM-DD"
-tags: ["tag1", "tag2"]
----
+    Chunking --> Embedder
+    Chunking --> BM25
+    
+    Embedder --> VectorDB[(Vector DB npy)]
+    BM25 --> MetadataDB[(Metadata DB json)]
+    
+    Query[User Query] --> Search[RRF Hybrid Search]
+    VectorDB --> Search
+    MetadataDB --> Search
+    
+    Search --> Context[Context Retrieval]
+    Context --> LLM[Local LLM Ollama]
+    LLM --> Response[Response Generation]
+    
+    VectorDB --> UMAP[3D UMAP Reduction]
+    UMAP --> Viz[3D Knowledge Graph Web View]
 ```
 
-### Storage Output
+## Key Features
 
-- **Vector DB:** `data/thought-search-db.json` & `data/thought-search-db.vectors.npy`
-- Stores text chunks, metadata, and their corresponding dense vector arrays separately for efficiency.
+### Hybrid Search & Local LLM RAG
+
+- **Hybrid Search**: Combines semantic search (Dense Vector) and traditional keyword matching (BM25) using the Reciprocal Rank Fusion (RRF) algorithm to ensure superior Korean search accuracy.
+- **Local LLM Response Generation**: Integrates with a local Ollama service (defaulting to `qwen2.5-coder:14b`) to generate context-aware, reliable answers based on the retrieved document segments.
+- **100% Offline Execution**: All inference tasks and data indexing are processed entirely on your local machine, protecting your private files and knowledge bases from external data leaks.
+
+### Korean NLP Optimization
+
+- **Morphological Analysis**: Built-in integration with the Kiwi morphological analyzer (`kiwipiepy`) for advanced tokenization and Korean particle removal.
+- **Custom Dictionary Support**: Seamlessly links with the external [Personal-Dictionary](file:///home/lee/Documents/code_personal/Personal-Dictionary/README.md) package to prevent technical terms or project-specific jargon (e.g., 3DGS, COLMAP) from being broken down during indexing.
+
+### Markdown Preprocessing & Chunking
+
+- **Noise Filtering**: Cleans raw Markdown files by stripping code blocks, formatting tags, image syntax, and simplifying links to optimize embedding and search index quality. It also filters out Markdown alert blocks (e.g., `[!NOTE]`, `[!WARNING]`) to avoid semantic distortion.
+- **Folder-based Categories**: Automatically extracts subfolder directory structures and saves them as `categories` metadata, allowing multi-dimensional category-based filtering.
+
+### 3D Knowledge Visualization
+
+- **3D Interactive Graph**: Visualizes document relationships in an interactive 3D web interface using UMAP dimensionality reduction and Plotly.js.
+- **Real-time Navigation**: Highlights nodes by keywords, adjusts node sizes by character density, and displays a Markdown preview panel when a node is clicked in the browser.
 
 ---
 
-## Tech Stack
+## Data Storage Structure
 
-- **Language:** Python 3.10+
-- **Environment:** Conda
-- **Embedding:** `sentence-transformers`
-- **Vector Operations:** `numpy`
-- **Local LLM (RAG):** `Ollama` (using `qwen2.5-coder:14b`)
+- **Vector Database**: `data/localmind-db.vectors.npy` (Stores high-dimensional dense vector embeddings)
+- **Metadata Database**: `data/localmind-db.json` (Stores text chunks, source paths, and category metadata)
+
+*Note: Existing databases (`thought-search-db.json` and `thought-search-db.vectors.npy`) will be automatically migrated to the `localmind-db` structure on execution.*
+
+*For detailed performance benchmarks and C++ native optimization details, refer to [docs/cpp-acceleration-report.md](file:///home/lee/Documents/code_personal/Thought-Search/docs/cpp-acceleration-report.md).*
 
 ---
 
-## Setup & Execution
+## Installation & Setup
 
 ### 1. Environment Setup (Conda)
 
 ```bash
 # Create and activate environment
-conda create -n thought-search python=3.10 -y
-conda activate thought-search
+conda create -n localmind python=3.10 -y
+conda activate localmind
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Install Custom Dictionary Manager (Optional but Recommended for Korean)
-# Path should be where you cloned Personal-Dictionary
+# Install Custom Dictionary Manager (Optional but Recommended)
+# Path should be the directory where you cloned the Personal-Dictionary repository
 pip install -e /path/to/Personal-Dictionary
 ```
 
-### 2. Configuration
+### 2. Environment Variables Configuration
 
-You can override the default posts directory using the `THOUGHT_SEARCH_POSTS` environment variable:
+The configuration loader prioritizes the `LOCAL_MIND_` prefix, while retaining fallback support for `THOUGHT_SEARCH_` environment variables.
 
 ```bash
-export THOUGHT_SEARCH_POSTS="/path/to/your/knowledge-base"
+# Path to your Markdown knowledge base (Defaults to: posts/)
+export LOCAL_MIND_POSTS="/path/to/your/knowledge-base"
+
+# Local Ollama connection configuration
+export LOCAL_MIND_OLLAMA_HOST="http://localhost:11434"
+export LOCAL_MIND_OLLAMA_MODEL="qwen2.5-coder:14b"
 ```
 
-### 3. Local LLM RAG Configuration
+Available environment variables are listed below:
 
-To use the RAG (Retrieval-Augmented Generation) feature:
+| Environment Variable (Priority 1) | Legacy Variable (Fallback) | Default Value | Description |
+| :--- | :--- | :--- | :--- |
+| `LOCAL_MIND_POSTS` | `THOUGHT_SEARCH_POSTS` | `posts` | Target directory containing Markdown files |
+| `LOCAL_MIND_MODEL` | `THOUGHT_SEARCH_MODEL` | `jhgan/ko-sroberta-multitask` | HuggingFace model for generating dense embeddings |
+| `LOCAL_MIND_RERANK_MODEL` | `THOUGHT_SEARCH_RERANK_MODEL` | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Re-ranking model for search optimization |
+| `LOCAL_MIND_MAX_CHUNK` | `THOUGHT_SEARCH_MAX_CHUNK` | `800` | Maximum character length of a single text chunk |
+| `LOCAL_MIND_OVERLAP` | `THOUGHT_SEARCH_OVERLAP` | `200` | Overlap character length between contiguous chunks |
+| `LOCAL_MIND_OLLAMA_HOST` | `THOUGHT_SEARCH_OLLAMA_HOST` | `http://localhost:11434` | Endpoint for the local Ollama API server |
+| `LOCAL_MIND_OLLAMA_MODEL` | `THOUGHT_SEARCH_OLLAMA_MODEL` | `qwen2.5-coder:14b` | Ollama model name to use for RAG responses |
+| `LOCAL_MIND_RELEVANCE_THRESHOLD` | `THOUGHT_SEARCH_RELEVANCE_THRESHOLD` | `0.5` | Minimum similarity score required for RAG context |
+| `LOCAL_MIND_SYNC_TOKEN` | `THOUGHT_SEARCH_SYNC_TOKEN` | `""` | Security token to authorize web-triggered database syncs |
 
-1. Install and run [Ollama](https://ollama.com/) on your local machine.
-2. Pull the default LLM model (or your customized model):
+### 3. Local LLM Setup (Ollama)
+
+1. Download and install [Ollama](https://ollama.com/).
+2. Pull the default language model for coding and general RAG:
+
    ```bash
    ollama pull qwen2.5-coder:14b
    ```
-3. Ensure the Ollama server is running (defaults to `http://localhost:11434`).
-4. (Optional) Customize the connection or model using environment variables:
-   ```bash
-   export THOUGHT_SEARCH_OLLAMA_HOST="http://localhost:11434"
-   export THOUGHT_SEARCH_OLLAMA_MODEL="qwen2.5-coder:14b"
-   ```
 
-### 4. Usage
+### 4. Running the System
 
-The most convenient way to use Thought-Search is via the `run.sh` script, which automatically activates the environment, indexes your documents, and starts the search engine.
+The easiest way to index and search is to run the automated shell script:
 
 ```bash
-# Start interactive search (with auto-indexing)
+# 1. Interactive terminal search (auto-indexes and starts prompt)
 ./run.sh
 
-# Search directly with a query
+# 2. Perform a direct, one-shot search
 ./run.sh "How to install Kubernetes?"
 
-# Search and get RAG answer using local Ollama model
+# 3. Retrieve context and generate a local LLM response using RAG
 ./run.sh "How to install Kubernetes?" --rag
+
+# 4. Launch the 3D visualization and web search server (Access at: http://localhost:8080)
+./run.sh --viz
 ```
 
-#### Manual Workflow
+#### Manual Pipeline Execution via Python CLI
 
 ```bash
-# 1. Index your markdown files
+# Step 1. Parse and index Markdown files to build the vector store
 python src/cli/indexer.py
 
-# 2. Search for a specific query
+# Step 2. Search via terminal CLI
 python src/cli/search.py "Your query here"
 
-# 3. Search and get RAG answer directly
+# Step 3. Execute a query with Ollama RAG integration
 python src/cli/search.py "Your query here" --rag
 ```
-
-### 5. 3D Visualization
-
-Visualize your knowledge base in an interactive 3D space:
-
-```bash
-# 1. Extract visualization data (UMAP 3D reduction)
-python src/viz/extract_viz_data.py
-
-# 2. Start the integrated search & visualization server
-./run.sh --viz
-
-# 3. Open in your browser
-# URL: http://localhost:8080
-```
-
-![Thought-Search Visualization](./docs/assets/viz_demo.webp)
-
-**Features:**
-
-- **Domain Coloring:** Nodes colored by top-level categories.
-- **Dynamic Sizing:** Larger nodes indicate richer content density.
-- **Real-time Search:** Instantly highlight nodes by title, tags, or content.
-- **Interactive Panel:** Click nodes to read rendered Markdown previews.
 
 ---
 
 ## Directory Structure
 
-- `data/`: Output directory for the database files.
-- `posts/`: Default directory for Input Markdown files.
-- `src/`: Application source code.
-  - `core/`: Core logic including search engines and database management.
-  - `cli/`: Command-line interfaces for indexing and searching.
-  - `viz/`: Visualization data processing logic.
+- `data/`: Contains database json, vector npy, and keywords list.
+- `posts/`: Default directory for source Markdown documents.
+- `src/`: Application source directory.
+  - `core/`: Core retrieval algorithms, database connectors, and visualization API servers.
+  - `cli/`: Executable python scripts for indexing and terminal searches.
+  - `viz/`: Dimensionality reduction scripts and static web assets.

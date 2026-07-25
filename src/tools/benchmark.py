@@ -28,7 +28,7 @@ def benchmark_search():
 
     query = "지식 정보 프로젝트의 목적" # Example query
     print(f"\n{'-'*50}")
-    print(f"Thought-Search Performance Benchmark")
+    print(f"LocalMind Performance Benchmark")
     print(f"{'-'*50}")
     print(f"[*] Target DB: {len(db.documents)} documents")
     print(f"[*] Query: '{query}'")
