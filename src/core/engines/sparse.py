@@ -7,6 +7,13 @@ from collections import Counter
 from kiwipiepy import Kiwi
 from personal_dict.manager import DictionaryManager
 
+# C++ extension import attempt
+try:
+    from .bm25_extension import BM25Kernel
+    HAS_CPP_EXTENSION = True
+except ImportError:
+    HAS_CPP_EXTENSION = False
+
 class SparseIndex:
     """Handles BM25-based sparse search logic for keyword-based retrieval.
 
@@ -44,6 +51,7 @@ class SparseIndex:
         self.dict_manager.load_dict()
         
         self.kiwi = self.dict_manager.get_kiwi()
+        self.cpp_engine = BM25Kernel(self.k1, self.b) if HAS_CPP_EXTENSION else None
 
     def _tokenize(self, text):
         """Morphological tokenizer for BM25 using Kiwi.
@@ -93,6 +101,11 @@ class SparseIndex:
         self.doc_lengths = [len(tokens) for tokens in doc_tokens]
         self.avgdl = sum(self.doc_lengths) / len(documents)
         
+        if HAS_CPP_EXTENSION and self.cpp_engine is not None:
+            self.cpp_engine.rebuild(doc_tokens)
+            self.tf = doc_tokens
+            return
+
         # Calculate TF
         self.tf = [Counter(tokens) for tokens in doc_tokens]
         
@@ -138,6 +151,20 @@ class SparseIndex:
             return []
 
         query_tokens = self._tokenize(query)
+        
+        if HAS_CPP_EXTENSION and self.cpp_engine is not None:
+            cpp_results = self.cpp_engine.search(query_tokens, top_k)
+            results = []
+            for score, idx in cpp_results:
+                results.append({
+                    "score": score,
+                    "text": documents[idx],
+                    "metadata": metadata[idx],
+                    "index": idx,
+                    "type": "keyword"
+                })
+            return results
+
         scores = torch.zeros(len(self.tf), device=self.device, dtype=torch.float32)
         
         for term in query_tokens:

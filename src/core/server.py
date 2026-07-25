@@ -310,7 +310,9 @@ def rag_search():
         # Filter out low-relevance results below rerank score threshold
         unique_results = [
             res for res in unique_results
-            if res.get("rerank_score", res.get("score", 0)) >= RAG_RELEVANCE_THRESHOLD
+            if res.get("rerank_score", res.get("score", 0)) >= RAG_RELEVANCE_THRESHOLD or (
+                res.get("type") == "keyword" and res.get("score", 0) >= 3.0
+            )
         ]
 
         client = OllamaClient()
