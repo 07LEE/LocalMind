@@ -28,7 +28,7 @@ def benchmark_search():
 
     query = "지식 정보 프로젝트의 목적" # Example query
     print(f"\n{'-'*50}")
-    print(f"🚀 Thought-Search Performance Benchmark")
+    print(f"Thought-Search Performance Benchmark")
     print(f"{'-'*50}")
     print(f"[*] Target DB: {len(db.documents)} documents")
     print(f"[*] Query: '{query}'")
@@ -56,7 +56,7 @@ def benchmark_search():
     print(f"[Hybrid Search] Avg Time: {hybrid_time*1000:.4f} ms")
     
     print(f"{'-'*50}")
-    print(f"✔ Benchmark complete.\n")
+    print(f"Benchmark complete.\n")
 
 if __name__ == "__main__":
     benchmark_search()

@@ -53,11 +53,11 @@ def main():
         search_query(db, args.query, args.top_k, args.threshold, rerank, args.rerank_k, rag=args.rag)
     else:
         print("\n=== Entering Interactive Search Mode (Type 'q' or 'quit' to exit) ===")
-        print(f"💡 Tip: Re-ranking is {'ENABLED' if rerank else 'DISABLED'}. Enter a result number to open!")
+        print(f"Tip: Re-ranking is {'ENABLED' if rerank else 'DISABLED'}. Enter a result number to open!")
         
         last_results = []
         while True:
-            query = input("🔍 Enter your query or #number: ")
+            query = input("Enter your query or #number: ")
             
             if query.lower() in ["q", "quit", "exit"]:
                 break
@@ -111,7 +111,7 @@ def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10, rag=
     RESET = "\033[0m"
 
     mode_str = f" {GREEN}(Re-ranking ON){RESET}" if rerank else ""
-    print(f"\n{CYAN}{BOLD}🔎 Search Results for: '{query}'{RESET}{mode_str} {DIM}(Min: {threshold}){RESET}")
+    print(f"\n{CYAN}{BOLD}Search Results for: '{query}'{RESET}{mode_str} {DIM}(Min: {threshold}){RESET}")
     print(f"{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
     
     # Increase k to ensure we have enough unique documents after deduplication
@@ -194,7 +194,7 @@ def search_query(db, query, top_k, threshold=0.0, rerank=True, rerank_k=10, rag=
     if rag:
         client = OllamaClient()
         prompt = client.build_rag_prompt(query, results)
-        print(f"{GREEN}{BOLD}🤖 Local LLM Response ({client.model}):{RESET}")
+        print(f"{GREEN}{BOLD}Local LLM Response ({client.model}):{RESET}")
         print(f"{DIM}──────────────────────────────────────────────────────────────{RESET}")
         for token in client.generate_stream(prompt):
             sys.stdout.write(token)

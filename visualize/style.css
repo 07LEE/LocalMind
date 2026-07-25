@@ -450,7 +450,7 @@ body {
     width: 100%;
     display: flex;
     justify-content: center;
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.5rem;
 }
 
 .main-search-box {
@@ -459,9 +459,14 @@ body {
     max-width: 650px;
 }
 
+.search-input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
 .main-search-input {
     width: 100%;
-    padding: 12px 18px;
+    padding: 12px 95px 12px 18px;
     background: var(--input-bg);
     border: 1px solid var(--input-border);
     border-radius: 3px;
@@ -478,6 +483,60 @@ body {
     border-color: var(--accent-color);
 }
 
+.search-submit-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+.search-submit-btn:hover {
+    color: var(--accent-color);
+}
+
+.rag-toggle-btn {
+    position: absolute;
+    right: 44px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 4px 11px;
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    outline: none;
+    height: 24px;
+    box-sizing: border-box;
+}
+.rag-toggle-btn:hover {
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+    background: rgba(var(--accent-rgb), 0.04);
+}
+.rag-toggle-btn.active {
+    background: var(--text-primary);
+    color: var(--bg-color);
+    border-color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.15);
+}
+
 .main-search-results {
     position: absolute;
     top: calc(100% + 4px);
@@ -486,13 +545,140 @@ body {
     background: var(--panel-bg);
     border: 1px solid var(--card-border);
     border-radius: 3px;
-    max-height: 250px;
+    max-height: 500px;
     overflow-y: auto;
     display: none;
     flex-direction: column;
     z-index: 100;
     scrollbar-width: thin;
     scrollbar-color: var(--card-border) transparent;
+}
+
+/* AI Answer Card Glassmorphism Style */
+.ai-answer-container {
+    border-bottom: 1px solid var(--divider);
+}
+
+.ai-answer-card {
+    background: rgba(var(--accent-rgb), 0.02);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 16px;
+    margin: 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.ai-answer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--divider);
+    padding-bottom: 8px;
+}
+
+.ai-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: var(--accent-color);
+    color: var(--bg-color);
+    padding: 3px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+}
+
+.ai-status {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+.ai-status.loading {
+    animation: ai-pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes ai-pulse {
+    0% { opacity: 0.4; }
+    50% { opacity: 1.0; }
+    100% { opacity: 0.4; }
+}
+
+.ai-answer-body {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.ai-answer-body p {
+    margin-top: 0;
+    margin-bottom: 0.8rem;
+}
+.ai-answer-body p:last-child {
+    margin-bottom: 0;
+}
+
+.ai-answer-body pre {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0.8rem 0;
+}
+
+.ai-answer-body code {
+    font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.82rem;
+    background: var(--hover-bg);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.ai-answer-body pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.82rem;
+}
+
+.ai-answer-body ul, .ai-answer-body ol {
+    margin-top: 0;
+    margin-bottom: 0.8rem;
+    padding-left: 1.5rem;
+}
+
+.ai-sources-section {
+    margin-top: 16px;
+    border-top: 1px dashed var(--divider);
+    padding-top: 12px;
+}
+
+.ai-sources-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.ai-sources-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ai-source-chip {
+    font-size: 0.72rem;
+    background: var(--tag-bg);
+    color: var(--tag-color);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid var(--card-border);
+}
+.ai-source-chip:hover {
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+    background: var(--hover-bg);
 }
 .main-search-results.active {
     display: flex;
@@ -513,6 +699,13 @@ body {
     font-size: 0.8rem;
     color: var(--accent-color);
     margin-bottom: 2px;
+}
+.result-score-inline {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    font-weight: normal;
+    margin-left: 6px;
+    opacity: 0.75;
 }
 .result-snippet {
     font-size: 0.75rem;
@@ -677,20 +870,19 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     width: 100%;
     max-width: 860px;
     height: 100%;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-    padding-right: 10px;
+    overflow-y: hidden; /* 스크롤 해제 */
+    overflow-x: hidden !important; /* 우측 숨김 영역으로 인한 가로 스크롤 방지 */
 }
 
 .info-panel {
     display: flex;
     flex-direction: column;
+    height: 100%; /* 고정 높이 */
     background-color: var(--bg-color);
 }
 
 .info-header {
-    position: sticky;
-    top: 0;
+    position: relative; /* sticky 해제 */
     background-color: var(--bg-color);
     z-index: 10;
     display: flex;
@@ -701,6 +893,7 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--divider);
     margin-bottom: 1.5rem;
+    flex-shrink: 0; /* 헤더 영역 보존 */
 }
 
 .info-header-left {
@@ -742,6 +935,123 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     color: var(--text-primary);
 }
 
+.toc-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 180px; /* Push down to align with body start and clear the sticky header */
+    margin-top: 1.5rem; /* Better visual alignment with the top of content */
+    max-height: calc(100vh - 240px);
+    overflow-y: auto;
+    padding-left: 1rem;
+    align-self: flex-start; /* Keep original height for sticky bounds */
+}
+
+/* Dropdown TOC Styles */
+.toc-dropdown {
+    position: relative;
+    width: 100%;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    background: var(--panel-bg);
+    overflow: visible;
+}
+
+.toc-dropdown-btn {
+    width: 100%;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s ease;
+}
+
+.toc-dropdown-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100% - 24px);
+    display: inline-block;
+}
+
+.toc-dropdown-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.toc-dropdown-btn svg {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.toc-dropdown.open .toc-dropdown-btn svg {
+    transform: rotate(180deg);
+}
+
+.toc-dropdown-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: -1px;
+    right: -1px;
+    background: var(--panel-bg);
+    border: 1px solid var(--divider);
+    border-top: none;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.toc-dropdown.open .toc-dropdown-content {
+    display: block;
+}
+
+.toc-dropdown-list {
+    list-style: none;
+    padding: 8px 0;
+    margin: 0;
+}
+
+.toc-dropdown-item {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    line-height: 1.4;
+}
+
+.toc-dropdown-item:hover {
+    background-color: var(--hover-bg);
+    color: var(--accent-color);
+}
+
+.toc-dropdown-item.active {
+    color: var(--accent-color);
+    font-weight: 600;
+    background-color: var(--hover-bg);
+}
+
+.toc-dropdown-item-h3 {
+    font-weight: 500;
+}
+
+.toc-dropdown-item-h4 {
+    padding-left: 28px;
+    font-size: 0.8rem;
+}
+
 .info-header-right {
     display: flex;
     flex-direction: column;
@@ -772,44 +1082,90 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
 }
 
 .info-body {
-    display: flex;
-    flex-direction: row;
-    gap: 2.5rem;
-    align-items: flex-start;
-    position: relative; /* Bounding context for position: sticky */
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    z-index: 20;
+    display: block;
+    height: calc(100% - 100px); /* 헤더 영역 제외 높이 고정 */
+    overflow-x: hidden; /* 우측 임시 숨김 영역으로 인한 가로 스크롤 방지 */
 }
 
-.info-body-left {
-    flex: 1;
-    min-width: 0;
+.info-body-content {
+    height: 100%;
+    overflow-y: auto; /* 본문 스크롤 영역으로 지정 */
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    padding-right: 48px; /* 우측 스크롤바 및 TOC 사이드바와의 간격 확보 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--card-border) transparent;
 }
 
 .toc-sidebar {
-    width: 200px;
-    flex-shrink: 0;
-    position: sticky;
-    top: 180px; /* Push down to align with body start and clear the sticky header */
-    margin-top: 1.5rem; /* Better visual alignment with the top of content */
-    max-height: calc(100vh - 240px);
-    overflow-y: auto;
-    padding-left: 1rem;
-    /* Soft border on the left to contain TOC guidelines */
-    border-left: 1px solid var(--divider);
-    align-self: flex-start; /* Keep original height for sticky bounds */
+    position: absolute;
+    right: 0;
+    top: 24px;
+    width: 32px; /* 평상시 얇은 세로 감지 띠 역할 수행 */
+    height: calc(100% - 48px);
+    background: transparent;
+    z-index: 100; /* 본문 내용 최상위 레이어로 얹힘 */
+    overflow: visible; /* 자식인 .toc-list 가 밖으로 튀어나와 렌더링되게 허용 */
+    transition: width 0.25s ease;
 }
 
+.toc-sidebar:hover {
+    width: 260px; /* 호버 시 감지 프레임 영역을 확장하여 마우스 조작 반경 확보 */
+}
 
+.toc-sidebar::after {
+    content: '';
+    position: absolute;
+    left: 12px; /* 32px 프레임 중앙부 부근에 정렬 */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 40px;
+    background-color: var(--text-secondary);
+    opacity: 0.4;
+    border-radius: 2px;
+    transition: opacity 0.2s ease;
+}
+
+.toc-sidebar:hover::after {
+    opacity: 0; /* 열렸을 때는 핸들 숨김 */
+}
 
 .toc-list {
     list-style: none;
-    padding: 0;
+    padding: 1.2rem;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    
+    /* 카드 비주얼 속성을 자식으로 통째로 이관 */
+    position: absolute;
+    right: -240px; /* 평소에는 프레임 바깥으로 완전히 대피하여 숨김 */
+    top: 0;
+    width: 220px;
+    max-height: 100%;
+    background: var(--panel-bg);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+    
+    opacity: 0; /* 접혔을 때는 카드 불투명도 및 글자 숨김 */
+    transition: right 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease,
+                box-shadow 0.25s ease;
+}
+
+.toc-sidebar:hover .toc-list {
+    right: 12px; /* 호버 시 260px 프레임 안쪽으로 스르륵 진입 */
+    opacity: 0.98;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
 
 .toc-item {
@@ -1143,14 +1499,16 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
         position: relative; /* Base context for absolute positioning */
     }
 
-    .info-body-left {
+    .info-body-content {
         width: 100%;
+        padding-right: 0 !important;
     }
 
-    /* 모바일 환경에서는 목차(TOC) 기능 제거 */
-    .toc-toggle-btn {
-        display: none !important;
+    .toc-dropdown {
+        display: block !important;
     }
+
+    /* 모바일 환경에서는 사이드바 제거 */
 
     .toc-sidebar {
         display: none !important;

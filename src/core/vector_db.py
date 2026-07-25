@@ -28,6 +28,7 @@ class SimpleVectorDB:
         
         # Lazy loading for reranker to save memory if not used
         self.reranker = None
+        self.models_loaded = False
 
         self.documents = []
         self.metadata = []
@@ -35,6 +36,8 @@ class SimpleVectorDB:
 
     def pre_load_models(self):
         """Pre-loads the embedding and re-ranking models into memory."""
+        if self.models_loaded:
+            return
         print(f"LOGE: [VectorDB] Pre-loading models...")
         # Force load dense embedding model
         self.dense_engine._load_model()
@@ -42,7 +45,13 @@ class SimpleVectorDB:
         if self.reranker is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             self.reranker = CrossEncoder(self.rerank_model_name, device=device)
+        self.models_loaded = True
         print(f"LOGE: [VectorDB] All models loaded.")
+
+    def ensure_models_loaded(self):
+        """Ensures that embedding and reranker models are loaded prior to search operations."""
+        if not self.models_loaded:
+            self.pre_load_models()
 
     def add_texts(self, texts, metadatas=None, batch_size=32):
         """Calculates embeddings for a list of texts, normalizes them, and adds them to the database.
@@ -163,15 +172,8 @@ class SimpleVectorDB:
         return self.sparse_engine.dict_manager.preprocess_query(query)
 
     def search(self, query, top_k=3):
-        """Searches the database for the most similar documents to the given query using vectorized operations.
-
-        Args:
-            query (str): The search query text.
-            top_k (int, optional): The number of top results to return. Defaults to 3.
-
-        Returns:
-            list[dict]: A list of dictionaries containing the score, text, and metadata for each result.
-        """
+        """Searches the database for the most similar documents to the given query using vectorized operations."""
+        self.ensure_models_loaded()
         query = self._preprocess_query(query)
         return self.dense_engine.search(query, self.documents, self.metadata, top_k=top_k)
 
@@ -227,28 +229,20 @@ class SimpleVectorDB:
         return combined_results
 
     def rerank(self, query, results):
-        """Refines search results using a Cross-Encoder for better accuracy.
-
-        Args:
-            query (str): The search query text.
-            results (list[dict]): Initial search results to rerank.
-
-        Returns:
-            list[dict]: Reranked results with new scores.
-        """
+        """Refines search results using a Cross-Encoder for better accuracy."""
         if not results:
             return []
-            
-        if self.reranker is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.reranker = CrossEncoder(self.rerank_model_name, device=device)
-            
+
+        self.ensure_models_loaded()
         pairs = [[query, res["text"]] for res in results]
         with torch.inference_mode():
             rerank_scores = self.reranker.predict(pairs)
         
+        import math
         for i, res in enumerate(results):
-            res["rerank_score"] = float(rerank_scores[i])
+            raw_score = float(rerank_scores[i])
+            # Cross-Encoder의 로짓 점수를 0.0 ~ 1.0 사이의 직관적인 유사도 확률값으로 변환
+            res["rerank_score"] = 1.0 / (1.0 + math.exp(-raw_score))
             
         results.sort(key=lambda x: x["rerank_score"], reverse=True)
         return results

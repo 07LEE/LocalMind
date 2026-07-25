@@ -5,6 +5,8 @@ import logging
 from collections import Counter
 from kiwipiepy import Kiwi
 
+from concurrent.futures import ThreadPoolExecutor
+
 # Try to import custom dictionary manager, but don't fail if missing
 try:
     from personal_dict import DictionaryManager
@@ -12,13 +14,47 @@ try:
 except ImportError:
     HAS_DICT_MANAGER = False
 
+def _process_single_file(file_path, kiwi):
+    """Processes a single markdown file and finds morphology analysis failures."""
+    local_failures = Counter()
+    local_details = {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        clean_text = re.sub(r'[#*`\[\]\(\)>-]', ' ', content)
+        chunks = clean_text.split()
+
+        for chunk in chunks:
+            word = chunk.strip('.,?!:;\'"()')
+            if len(word) < 2: continue
+
+            results = kiwi.analyze(word, top_n=1)
+            if not results: continue
+
+            tokens, score = results[0]
+
+            # FAILURE DEFINITION: Split into multiple nouns/fragments
+            if len(tokens) > 1:
+                is_failed_compound = all(t.tag.startswith('N') or t.tag in ('SL', 'SN') for t in tokens)
+
+                if is_failed_compound:
+                    local_failures[word] += 1
+                    if word not in local_details:
+                        detail = " + ".join([f"{t.form}/{t.tag}" for t in tokens])
+                        local_details[word] = detail
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+
+    return local_failures, local_details
+
 def scan_posts(posts_dir, min_count=5):
     """
     Surgical Failure Detector: Finds words that Kiwi splits into multiple NOUNS.
-    Clean Version: No emojis in logs.
+    Clean Version: No emojis in logs. Multi-threaded processing enabled.
     """
     kiwi = None
-    
+
     # 1. Initialize Kiwi (with or without custom dict)
     if HAS_DICT_MANAGER:
         try:
@@ -28,52 +64,33 @@ def scan_posts(posts_dir, min_count=5):
             print("[DictionaryManager] Custom dictionary loaded successfully.")
         except Exception as e:
             print(f"Failed to load custom dictionary: {e}")
-    
+
     if not kiwi:
         print("Using base Kiwi model (Custom dictionary system not found or failed).")
         kiwi = Kiwi()
-    
+
     analysis_failures = Counter()
-    failure_details = {} 
-    
+    failure_details = {}
+
     print(f"Detecting analysis failures (split tokens) in: {posts_dir}")
-    
-    file_count = 0
+
+    target_files = []
     for root, _, files in os.walk(posts_dir):
         for file in files:
-            if file.endswith('.md'):
-                file_count += 1
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        
-                        clean_text = re.sub(r'[#*`\[\]\(\)>-]', ' ', content)
-                        chunks = clean_text.split()
-                        
-                        for chunk in chunks:
-                            word = chunk.strip('.,?!:;\'"()')
-                            if len(word) < 2: continue
-                            
-                            results = kiwi.analyze(word, top_n=1)
-                            if not results: continue
-                            
-                            tokens, score = results[0]
-                            
-                            # FAILURE DEFINITION: Split into multiple nouns/fragments
-                            if len(tokens) > 1:
-                                is_failed_compound = all(t.tag.startswith('N') or t.tag in ('SL', 'SN') for t in tokens)
-                                
-                                if is_failed_compound:
-                                    analysis_failures[word] += 1
-                                    if word not in failure_details:
-                                        detail = " + ".join([f"{t.form}/{t.tag}" for t in tokens])
-                                        failure_details[word] = detail
-                                
-                except Exception as e:
-                    print(f"Error reading {file_path}: {e}")
+            if file.endswith('.md') and not file.lower().startswith('readme'):
+                target_files.append(os.path.join(root, file))
 
-    print(f"Scanned {file_count} files.")
+    max_workers = min(32, (os.cpu_count() or 4) + 4)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_process_single_file, file_path, kiwi) for file_path in target_files]
+        for future in futures:
+            local_failures, local_details = future.result()
+            analysis_failures.update(local_failures)
+            for word, detail in local_details.items():
+                if word not in failure_details:
+                    failure_details[word] = detail
+
+    print(f"Scanned {len(target_files)} files using {max_workers} threads.")
     
     suggestions = [(word, count) for word, count in analysis_failures.most_common() if count >= min_count]
 

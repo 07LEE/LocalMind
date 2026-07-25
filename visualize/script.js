@@ -258,6 +258,17 @@ function updatePlotlyTheme(theme) {
     }, [2]).catch(() => { });
 }
 
+function markdownParse(text) {
+    if (typeof marked !== 'undefined') {
+        if (typeof marked.parse === 'function') {
+            return marked.parse(text);
+        } else if (typeof marked === 'function') {
+            return marked(text);
+        }
+    }
+    return text.replace(/\n/g, '<br>');
+}
+
 async function init() {
     try {
         // Theme initialization
@@ -290,6 +301,23 @@ async function init() {
 
         if (themeToggle) themeToggle.addEventListener('click', handleThemeToggle);
         if (themeToggleMobile) themeToggleMobile.addEventListener('click', handleThemeToggle);
+
+        // --- TOC Layout Control Setup ---
+        const tocDropdown = document.getElementById('toc-dropdown');
+        const tocDropdownBtn = document.getElementById('toc-dropdown-btn');
+
+        if (tocDropdownBtn && tocDropdown) {
+            tocDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tocDropdown.classList.toggle('open');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (tocDropdown.classList.contains('open') && !tocDropdown.contains(e.target)) {
+                    tocDropdown.classList.remove('open');
+                }
+            });
+        }
 
         // --- Markdown Setup ---
         marked.use({
@@ -607,7 +635,30 @@ async function init() {
 
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');
+        const resultsList = document.getElementById('search-results-list');
+        const aiContainer = document.getElementById('ai-answer-container');
+        const aiBody = document.getElementById('ai-answer-body');
+        const aiStatus = document.getElementById('ai-status');
+        const aiSourcesList = document.getElementById('ai-sources-list');
+        const submitBtn = document.getElementById('search-submit-btn');
+        const ragToggleBtn = document.getElementById('rag-toggle-btn');
+        
         let searchTimeout;
+        let isRagMode = false;
+        let ragAbortController = null;
+
+        if (ragToggleBtn) {
+            ragToggleBtn.addEventListener('click', function () {
+                isRagMode = !isRagMode;
+                this.classList.toggle('active', isRagMode);
+                if (aiContainer) aiContainer.style.display = 'none';
+                if (resultsList) resultsList.innerHTML = '';
+                if (ragAbortController) {
+                    ragAbortController.abort();
+                    ragAbortController = null;
+                }
+            });
+        }
 
         if (searchInput && searchResults) {
             searchInput.addEventListener('input', function () {
@@ -616,8 +667,18 @@ async function init() {
 
                 if (!query) {
                     searchResults.classList.remove('active');
-                    searchResults.innerHTML = '';
+                    if (resultsList) resultsList.innerHTML = '';
+                    if (aiContainer) aiContainer.style.display = 'none';
+                    if (ragAbortController) {
+                        ragAbortController.abort();
+                        ragAbortController = null;
+                    }
                     resetView();
+                    return;
+                }
+
+                if (isRagMode) {
+                    // RAG 모드일 때는 실시간 검색을 막음
                     return;
                 }
 
@@ -625,11 +686,12 @@ async function init() {
                     try {
                         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
                         const data = await response.json();
-
                         if (data.status === 'success' && data.results.length > 0) {
                             displaySearchResults(data.results);
                         } else {
-                            searchResults.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                            if (resultsList) {
+                                resultsList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                            }
                             searchResults.classList.add('active');
                         }
                     } catch (err) {
@@ -639,7 +701,8 @@ async function init() {
             });
 
             function displaySearchResults(results) {
-                searchResults.innerHTML = '';
+                const targetList = resultsList || searchResults;
+                targetList.innerHTML = '';
                 searchResults.classList.add('active');
 
                 const resultPaths = new Set(results.map(res => res.metadata.rel_path));
@@ -660,11 +723,10 @@ async function init() {
                     const title = meta.title || meta.filename;
 
                     item.innerHTML = `
-                        <div class="result-title">${title}</div>
-                        <div class="result-snippet">${res.snippet || res.text}</div>
-                        <div class="result-meta">
-                            <div class="result-score">Similarity: ${score.toFixed(4)}</div>
+                        <div class="result-title">
+                            ${title} <span class="result-score-inline">(${(score * 100).toFixed(1)}%)</span>
                         </div>
+                        <div class="result-snippet">${res.snippet || res.text}</div>
                     `;
 
                     item.onclick = () => {
@@ -677,7 +739,7 @@ async function init() {
                         }
                     };
 
-                    searchResults.appendChild(item);
+                    targetList.appendChild(item);
                 });
 
                 if (resultIndices.size > 0) {
@@ -686,8 +748,222 @@ async function init() {
                 }
             }
 
+            const triggerSearch = () => {
+                const query = searchInput.value.trim();
+                if (!query) return;
+
+                if (isRagMode) {
+                    executeRAGSearch(query);
+                } else {
+                    executeNormalSearch(query);
+                }
+            };
+
+            if (submitBtn) {
+                submitBtn.addEventListener('click', triggerSearch);
+            }
+
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    triggerSearch();
+                }
+            });
+
+            async function executeNormalSearch(query) {
+                const targetList = resultsList || searchResults;
+                if (aiContainer) aiContainer.style.display = 'none';
+                searchResults.classList.add('active');
+                targetList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 중...</div>';
+
+                try {
+                    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&k=10`);
+                    const data = await response.json();
+
+                    if (data.status === 'success' && data.results.length > 0) {
+                        displaySearchResults(data.results);
+                    } else {
+                        targetList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 결과가 없습니다.</div>';
+                    }
+                } catch (err) {
+                    console.error('Search error:', err);
+                    targetList.innerHTML = '<div style="padding: 15px; color: var(--text-secondary); font-size: 0.8rem; text-align: center;">검색 에러가 발생했습니다.</div>';
+                }
+            }
+
+            async function executeRAGSearch(query) {
+                if (ragAbortController) {
+                    ragAbortController.abort();
+                    ragAbortController = null;
+                }
+                ragAbortController = new AbortController();
+                const signal = ragAbortController.signal;
+
+                searchResults.classList.add('active');
+                if (aiContainer) aiContainer.style.display = 'block';
+                if (aiBody) aiBody.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 8px 0;">답변 생성 시작 중...</div>';
+                if (aiStatus) {
+                    aiStatus.textContent = '문서 검색 및 답변 생성 중...';
+                    aiStatus.classList.add('loading');
+                }
+                if (aiSourcesList) aiSourcesList.innerHTML = '';
+                if (resultsList) resultsList.innerHTML = '';
+
+                const markdownParse = (text) => {
+                    if (typeof marked !== 'undefined') {
+                        if (typeof marked.parse === 'function') {
+                            return marked.parse(text);
+                        } else if (typeof marked === 'function') {
+                            return marked(text);
+                        }
+                    }
+                    return text;
+                };
+
+                try {
+                    const response = await fetch('/api/answers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query, k: 5 }),
+                        signal
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    let fullAnswerText = '';
+                    let matchedMetadata = [];
+                    let isStreamDone = false;
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            const cleanedLine = line.trim();
+                            if (!cleanedLine) continue;
+
+                            const dataIndex = cleanedLine.indexOf('data:');
+                            if (dataIndex === -1) continue;
+
+                            const dataStr = cleanedLine.substring(dataIndex + 5).trim();
+                            if (dataStr === '[DONE]') {
+                                isStreamDone = true;
+                                break;
+                            }
+
+                            try {
+                                const payload = JSON.parse(dataStr);
+                                if (payload.type === 'metadata') {
+                                    matchedMetadata = payload.results;
+                                    displaySearchResults(matchedMetadata);
+                                } else if (payload.type === 'content') {
+                                    fullAnswerText += payload.text;
+                                    if (aiBody) {
+                                        try {
+                                            aiBody.innerHTML = markdownParse(fullAnswerText);
+                                            if (typeof renderMathInElement === 'function') {
+                                                renderMathInElement(aiBody, {
+                                                    delimiters: [
+                                                        {left: '$$', right: '$$', display: true},
+                                                        {left: '$', right: '$', display: false},
+                                                        {left: '\\(', right: '\\)', display: false},
+                                                        {left: '\\[', right: '\\]', display: true}
+                                                    ],
+                                                    throwOnError: false
+                                                });
+                                            }
+                                        } catch (renderErr) {
+                                            console.error('Render error:', renderErr);
+                                            aiBody.innerHTML = `<div style="color: #ff6b6b; font-size:0.85rem; padding: 8px; border: 1px solid #ff6b6b; background: rgba(255, 107, 107, 0.05);">렌더링 오류: ${renderErr.message}</div>`;
+                                            if (aiStatus) {
+                                                aiStatus.textContent = '렌더링 오류';
+                                                aiStatus.classList.remove('loading');
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('SSE JSON parse error:', e, dataStr);
+                                if (aiBody) {
+                                    aiBody.innerHTML = `<div style="color: #ff6b6b; font-size:0.85rem; padding: 8px; border: 1px solid #ff6b6b; background: rgba(255, 107, 107, 0.05); margin-top: 8px;">
+                                        오류 발생: ${e.message}<br>
+                                        <small style="color: var(--text-secondary);">Data: ${dataStr}</small>
+                                    </div>`;
+                                    if (aiStatus) {
+                                        aiStatus.textContent = '오류 발생';
+                                        aiStatus.classList.remove('loading');
+                                    }
+                                }
+                            }
+                        }
+                        if (isStreamDone) break;
+                    }
+
+                    if (aiStatus && !signal.aborted) {
+                        aiStatus.textContent = '답변 완료';
+                        aiStatus.classList.remove('loading');
+                    }
+                    renderSourceChips(matchedMetadata);
+
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        console.log('RAG search aborted');
+                        return;
+                    }
+                    console.error('RAG Search Error:', err);
+                    if (aiStatus) {
+                        aiStatus.textContent = '에러 발생';
+                        aiStatus.classList.remove('loading');
+                    }
+                    if (aiBody) {
+                        aiBody.innerHTML = `<div style="color: #ff6b6b; font-size: 0.85rem; padding: 8px; border: 1px solid #ff6b6b; background: rgba(255, 107, 107, 0.05);">답변 생성에 실패했습니다. (Error: ${err.message})</div>`;
+                    }
+                }
+            }
+
+
+
+            function renderSourceChips(results) {
+                if (!aiSourcesList) return;
+                aiSourcesList.innerHTML = '';
+
+                if (!results || results.length === 0) {
+                    aiSourcesList.innerHTML = '<span style="font-size: 0.72rem; color: var(--text-secondary);">참조 문서 없음</span>';
+                    return;
+                }
+
+                results.forEach(res => {
+                    const meta = res.metadata;
+                    const title = meta.title || meta.filename;
+                    const chip = document.createElement('div');
+                    chip.className = 'ai-source-chip';
+                    chip.textContent = title;
+                    chip.title = meta.rel_path;
+
+                    chip.onclick = () => {
+                        const nodeIndex = globalNodes.findIndex(n => n.metadata.rel_path === meta.rel_path);
+                        if (nodeIndex !== -1) {
+                            highlightNode(nodeIndex);
+                            searchResults.classList.remove('active');
+                        } else {
+                            alert('Graph에서 해당 문서를 찾을 수 없습니다.');
+                        }
+                    };
+
+                    aiSourcesList.appendChild(chip);
+                });
+            }
+
             document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                if (!searchInput.contains(e.target) && !searchResults.contains(e.target) && (!submitBtn || !submitBtn.contains(e.target))) {
                     searchResults.classList.remove('active');
                 }
             });
@@ -828,27 +1104,29 @@ async function init() {
                             if (statusData.status === 'idle') {
                                 clearInterval(pollInterval);
                                 location.reload();
-                            } else if (statusData.status.startsWith('error')) {
+                            } else if (statusData.status === 'error' || statusData.status.startsWith('error')) {
                                 clearInterval(pollInterval);
-                                alert('Sync failed: ' + statusData.status);
+                                console.error('Sync monitoring status error:', statusData.status);
+                                alert('동기화 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
                                 resetSyncButton();
                             }
                         } catch (pollErr) {
                             console.error('Polling error:', pollErr);
                             clearInterval(pollInterval);
-                            alert('An error occurred during sync monitoring.');
+                            alert('동기화 상태 확인 중 오류가 발생했습니다.');
                             resetSyncButton();
                         }
                     }, 2000);
                 } else if (result.status === 'success') {
                     location.reload();
                 } else {
-                    alert('Sync failed: ' + result.message);
+                    console.error('Sync request failed:', result.message);
+                    alert('동기화를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
                     resetSyncButton();
                 }
             } catch (err) {
                 console.error('Sync Error:', err);
-                alert('An error occurred during sync.');
+                alert('동기화 과정에서 오류가 발생했습니다.');
                 resetSyncButton();
             }
         });
@@ -969,6 +1247,8 @@ async function highlightNode(index) {
             document.getElementById('doc-view').style.display = 'block';
             document.querySelector('.main-content').scrollTop = 0;
             document.getElementById('doc-view').scrollTop = 0;
+            const infoBodyContent = document.querySelector('.info-body-content');
+            if (infoBodyContent) infoBodyContent.scrollTop = 0;
             return;
         }
 
@@ -1023,16 +1303,30 @@ async function highlightNode(index) {
             return id;
         });
 
-        let renderedHtml = marked.parse(processedContent);
+        let renderedHtml = markdownParse(processedContent);
 
         // Convert GFM alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
-        // Supports both multiline and inline (> [!NOTE] > content) formats under a unified regex
+        // Supports multiline alerts containing block elements (like lists or multiple paragraphs)
         renderedHtml = renderedHtml.replace(
-            /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:(?:&gt;|>)\s*)?([\s\S]*?)<\/p>\s*<\/blockquote>/gi,
-            (match, type, content) => {
-                const t = type.toUpperCase();
-                const icons = { NOTE: 'ℹ️', TIP: '💡', IMPORTANT: '❗', WARNING: '⚠️', CAUTION: '🔴' };
-                return `<div class="gfm-alert gfm-alert-${t.toLowerCase()}"><p class="gfm-alert-title">${icons[t] || ''} ${t}</p><p>${content.trim()}</p></div>`;
+            /<blockquote>([\s\S]*?)<\/blockquote>/gi,
+            (match, content) => {
+                const alertRegex = /^\s*<p>(?:<strong>|<b>)?\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<\/strong>|<\/b>)?\s*(?:(?:&gt;|>)\s*)?(?:\s*<br\s*\/?>)?\s*([\s\S]*)$/i;
+                const alertMatch = content.match(alertRegex);
+                if (alertMatch) {
+                    const type = alertMatch[1].toUpperCase();
+                    const remainder = alertMatch[2];
+                    const icons = { NOTE: '[INFO]', TIP: '[TIP]', IMPORTANT: '[IMPORTANT]', WARNING: '[WARNING]', CAUTION: '[CAUTION]' };
+                    
+                    let newContent = '';
+                    if (remainder.trim().startsWith('</p>')) {
+                        newContent = remainder.replace(/^\s*<\/p>/i, '');
+                    } else {
+                        newContent = `<p>${remainder}`;
+                    }
+                    
+                    return `<div class="gfm-alert gfm-alert-${type.toLowerCase()}"><p class="gfm-alert-title">${icons[type] || type}</p>${newContent}</div>`;
+                }
+                return match;
             }
         );
 
@@ -1074,27 +1368,51 @@ async function highlightNode(index) {
         const headers = infoContentEl.querySelectorAll('h3, h4');
         const tocList = document.getElementById('toc-list');
         const tocSidebar = document.getElementById('toc-sidebar');
+        const tocDropdown = document.getElementById('toc-dropdown');
+        const tocDropdownList = document.getElementById('toc-dropdown-list');
+        const tocDropdownBtn = document.getElementById('toc-dropdown-btn');
         const docView = document.getElementById('doc-view');
 
         // Clean up previous scroll listener
-        if (docView && currentScrollSpyHandler) {
-            docView.removeEventListener('scroll', currentScrollSpyHandler);
+        const infoBodyContent = document.querySelector('.info-body-content');
+        if (infoBodyContent && currentScrollSpyHandler) {
+            infoBodyContent.removeEventListener('scroll', currentScrollSpyHandler);
             currentScrollSpyHandler = null;
         }
 
         tocList.innerHTML = '';
+        if (tocDropdownList) tocDropdownList.innerHTML = '';
+
+        // Reset dropdown button text
+        if (tocDropdownBtn) {
+            const textSpan = tocDropdownBtn.querySelector('span');
+            if (textSpan) textSpan.textContent = '목차';
+        }
+
+
 
         if (headers.length === 0) {
-            tocSidebar.style.display = 'none';
+            if (tocSidebar) tocSidebar.style.display = 'none';
+            if (tocDropdown) tocDropdown.style.display = 'none';
         } else {
-            tocSidebar.style.display = 'block';
+            // Responsive visibility based on viewport size (900px breakpoint)
+            if (window.innerWidth <= 900) {
+                if (tocSidebar) tocSidebar.style.display = 'none';
+                if (tocDropdown) tocDropdown.style.display = 'block';
+            } else {
+                if (tocSidebar) tocSidebar.style.display = 'block';
+                if (tocDropdown) tocDropdown.style.display = 'none';
+            }
+
             const headerElements = Array.from(headers);
             const tocItems = [];
+            const tocDropdownItems = [];
 
             headerElements.forEach((header, idx) => {
                 const headerId = `toc-section-${idx}`;
                 header.id = headerId;
 
+                // Sidebar TOC item
                 const li = document.createElement('li');
                 li.className = `toc-item toc-item-${header.tagName.toLowerCase()}`;
                 li.textContent = header.textContent;
@@ -1109,12 +1427,28 @@ async function highlightNode(index) {
 
                 tocList.appendChild(li);
                 tocItems.push(li);
+
+                // Dropdown TOC item
+                if (tocDropdownList) {
+                    const dropLi = document.createElement('li');
+                    dropLi.className = `toc-dropdown-item toc-dropdown-item-${header.tagName.toLowerCase()}`;
+                    dropLi.textContent = header.textContent;
+
+                    dropLi.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        if (tocDropdown) tocDropdown.classList.remove('open');
+                    });
+
+                    tocDropdownList.appendChild(dropLi);
+                    tocDropdownItems.push(dropLi);
+                }
             });
 
             // Notion-like Scroll Spy Implementation
             const handleScrollSpy = () => {
                 let activeIndex = 0;
-                const scrollContainerTop = docView.getBoundingClientRect().top;
+                const scrollContainerTop = infoBodyContent ? infoBodyContent.getBoundingClientRect().top : 0;
 
                 for (let i = 0; i < headerElements.length; i++) {
                     const rect = headerElements[i].getBoundingClientRect();
@@ -1133,11 +1467,26 @@ async function highlightNode(index) {
                         li.classList.remove('active');
                     }
                 });
+
+                tocDropdownItems.forEach((li, idx) => {
+                    if (idx === activeIndex) {
+                        li.classList.add('active');
+                        // 드롭다운 버튼의 텍스트를 현재 활성화된 섹션명으로 업데이트
+                        if (tocDropdownBtn) {
+                            const textSpan = tocDropdownBtn.querySelector('span');
+                            if (textSpan) textSpan.textContent = headerElements[idx].textContent;
+                        }
+                    } else {
+                        li.classList.remove('active');
+                    }
+                });
             };
 
             // Register scroll observer
-            docView.addEventListener('scroll', handleScrollSpy);
-            currentScrollSpyHandler = handleScrollSpy;
+            if (infoBodyContent) {
+                infoBodyContent.addEventListener('scroll', handleScrollSpy);
+                currentScrollSpyHandler = handleScrollSpy;
+            }
 
             // Trigger once initially to highlight the top section
             handleScrollSpy();
@@ -1197,6 +1546,7 @@ async function highlightNode(index) {
         // Scroll containers to top
         document.querySelector('.main-content').scrollTop = 0;
         document.getElementById('doc-view').scrollTop = 0;
+        if (infoBodyContent) infoBodyContent.scrollTop = 0;
 
     } catch (err) {
         console.error('Highlight error:', err);
@@ -1270,20 +1620,22 @@ function resetView() {
         // Clear search values
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');
+        const resultsList = document.getElementById('search-results-list');
+        const welcomeView = document.getElementById('welcome-view');
+        const docView = document.getElementById('doc-view');
+
         if (searchInput) searchInput.value = '';
-        if (searchResults) {
-            searchResults.innerHTML = '';
-            searchResults.classList.remove('active');
-        }
+        if (searchResults) searchResults.classList.remove('active');
+        if (resultsList) resultsList.innerHTML = '';
 
         // Show Welcome View & Hide Document Content View
-        document.getElementById('welcome-view').style.display = 'block';
-        document.getElementById('doc-view').style.display = 'none';
+        if (welcomeView) welcomeView.style.display = 'block';
+        if (docView) docView.style.display = 'none';
 
         // Clear Scroll Spy Handler
-        const docView = document.getElementById('doc-view');
-        if (docView && currentScrollSpyHandler) {
-            docView.removeEventListener('scroll', currentScrollSpyHandler);
+        const infoBodyContent = document.querySelector('.info-body-content');
+        if (infoBodyContent && currentScrollSpyHandler) {
+            infoBodyContent.removeEventListener('scroll', currentScrollSpyHandler);
             currentScrollSpyHandler = null;
         }
 
