@@ -1385,8 +1385,8 @@ async function highlightNode(index) {
             throwOnError: false
         });
 
-        // Generate Table of Contents (TOC) with Scroll Spy (Filter only H3 and H4)
-        const headers = infoContentEl.querySelectorAll('h3, h4');
+        // Generate Table of Contents (TOC) with Scroll Spy (Include H2, H3, and H4)
+        const headers = infoContentEl.querySelectorAll('h2, h3, h4');
         const tocList = document.getElementById('toc-list');
         const tocSidebar = document.getElementById('toc-sidebar');
         const tocDropdown = document.getElementById('toc-dropdown');

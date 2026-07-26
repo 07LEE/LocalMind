@@ -1043,12 +1043,18 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     background-color: var(--hover-bg);
 }
 
+.toc-dropdown-item-h2 {
+    font-weight: 600;
+    padding-left: 16px;
+}
+
 .toc-dropdown-item-h3 {
     font-weight: 500;
+    padding-left: 28px;
 }
 
 .toc-dropdown-item-h4 {
-    padding-left: 28px;
+    padding-left: 40px;
     font-size: 0.8rem;
 }
 
@@ -1191,13 +1197,18 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     font-weight: 600;
 }
 
-.toc-item-h3 {
+.toc-item-h2 {
     font-weight: 600;
     padding-left: 0;
 }
 
-.toc-item-h4 {
+.toc-item-h3 {
+    font-weight: 500;
     padding-left: 0.75rem;
+}
+
+.toc-item-h4 {
+    padding-left: 1.5rem;
     font-size: 0.75rem;
 }
 
@@ -1226,9 +1237,18 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
 .info-content h1, .info-content h2, .info-content h3, .info-content h4 {
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     color: var(--text-primary);
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.8rem;
     font-weight: 600;
+    scroll-margin-top: 0.5rem;
+}
+
+.info-content > *:first-child,
+.info-content h1:first-child,
+.info-content h2:first-child,
+.info-content h3:first-child,
+.info-content h4:first-child {
+    margin-top: 0 !important;
 }
 
 .info-content h1 { font-size: 1.5rem; border-bottom: 1px solid var(--divider); padding-bottom: 0.3rem; }
