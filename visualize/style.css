@@ -772,14 +772,14 @@ body {
     color: var(--text-secondary);
 }
 
-#threshold-slider {
+#threshold-slider, #size-scale-slider {
     width: 100px;
     height: 4px;
     background: var(--divider);
     outline: none;
     appearance: none;
 }
-#threshold-slider::-webkit-slider-thumb {
+#threshold-slider::-webkit-slider-thumb, #size-scale-slider::-webkit-slider-thumb {
     appearance: none;
     width: 10px;
     height: 10px;

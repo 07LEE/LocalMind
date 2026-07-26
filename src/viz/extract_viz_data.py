@@ -261,7 +261,7 @@ def extract_visualization_data():
             "x": float(vectors_3d[i, 0]),
             "y": float(vectors_3d[i, 1]),
             "z": float(vectors_3d[i, 2]),
-            "size": 8 + min(12, len(file_texts[i]) / 1000),
+            "size_weight": float(min(1.0, len(file_texts[i]) / 5000)),
             "color": hierarchical_colors.get((parent, sub), parent_base_colors.get(parent, (0, 0, 0, "#cccccc"))[3]),
             "category": parent,
             "mtime": mtime,

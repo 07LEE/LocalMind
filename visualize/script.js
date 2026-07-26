@@ -10,6 +10,16 @@ let orbitAngle = 0;
 let activeSubHighlight = null;
 let activeSearchIndices = null;
 let hoveredIndex = null;
+let currentSizeScale = 1.2;
+
+function getNodeSize(node) {
+    if (node.size_weight !== undefined) {
+        const base = 8 + node.size_weight * 14;
+        return base * currentSizeScale;
+    }
+    const s = node.size || 10;
+    return s * currentSizeScale;
+}
 
 function getNodeTime(node) {
     if (node.metadata && node.metadata.date) {
@@ -74,7 +84,7 @@ async function applyGraphVisualState() {
             });
 
             baseOpacities = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
+            baseSizes = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? getNodeSize(n) * 1.5 : 3 * currentSizeScale);
         } else if (activeSubHighlight !== null) {
             const [cat, sub] = activeSubHighlight.split(' :: ');
             baseOpacities = globalNodes.map(n => {
@@ -82,14 +92,14 @@ async function applyGraphVisualState() {
             });
             baseSizes = globalNodes.map(n => {
                 const isMatch = n.category === cat && (n.subcategory === sub || n.subcategory.startsWith(sub + ' > '));
-                return isMatch ? n.size : 1.5;
+                return isMatch ? getNodeSize(n) : 2.5 * currentSizeScale;
             });
         } else if (activeSearchIndices !== null) {
             baseOpacities = globalNodes.map((n, i) => activeSearchIndices.has(i) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => activeSearchIndices.has(i) ? n.size * 1.5 : 2);
+            baseSizes = globalNodes.map((n, i) => activeSearchIndices.has(i) ? getNodeSize(n) * 1.5 : 3 * currentSizeScale);
         } else {
             baseOpacities = globalNodes.map(() => 0.9);
-            baseSizes = globalNodes.map(n => n.size);
+            baseSizes = globalNodes.map(n => getNodeSize(n));
         }
 
         const edgeX = [], edgeY = [], edgeZ = [];
@@ -583,7 +593,7 @@ async function init() {
             mode: 'markers',
             type: 'scatter3d',
             marker: {
-                size: globalNodes.map(n => n.size),
+                size: globalNodes.map(n => getNodeSize(n)),
                 color: globalNodes.map(n => n.color),
                 opacity: 0.9,
                 line: { color: nodeLineColor, width: 0.5 }
@@ -977,6 +987,17 @@ async function init() {
             thresholdVal.textContent = currentThreshold.toFixed(2);
             applyGraphVisualState();
         });
+
+        const sizeScaleSlider = document.getElementById('size-scale-slider');
+        const sizeScaleVal = document.getElementById('size-scale-val');
+
+        if (sizeScaleSlider) {
+            sizeScaleSlider.addEventListener('input', function () {
+                currentSizeScale = parseFloat(this.value);
+                if (sizeScaleVal) sizeScaleVal.textContent = currentSizeScale.toFixed(1);
+                updateGraphNodeSizes();
+            });
+        }
 
         const plotDiv = document.getElementById('plot');
 
@@ -1646,6 +1667,10 @@ function resetView() {
     } finally {
         isUpdating = false;
     }
+}
+
+function updateGraphNodeSizes() {
+    applyGraphVisualState();
 }
 
 document.addEventListener('DOMContentLoaded', init);
