@@ -13,7 +13,7 @@ sys.path.append(os.path.join(BASE_DIR, "src"))
 from cli.indexer import index_markdown_files
 from tools.scan_keywords import scan_posts
 from viz.extract_viz_data import extract_visualization_data
-from core.config import DB_DEFAULT_PATH, POSTS_DIR, RAG_RELEVANCE_THRESHOLD, SYNC_TOKEN
+from core.config import DB_DEFAULT_PATH, POSTS_DIR, RAG_RELEVANCE_THRESHOLD, SYNC_TOKEN, MASTER_IP
 from core.vector_db import SimpleVectorDB, clean_markdown
 from core.llm import OllamaClient
 
@@ -49,6 +49,28 @@ def get_client_ip():
     if request.headers.get('X-Forwarded-For'):
         return request.headers.get('X-Forwarded-For').split(',')[0].strip()
     return request.remote_addr or "127.0.0.1"
+
+def is_sync_authorized():
+    """Checks if the current client request is authorized to perform sync."""
+    if SYNC_TOKEN:
+        auth_header = request.headers.get("Authorization", "")
+        token_header = request.headers.get("X-Sync-Token", "")
+        provided_token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else token_header
+        if provided_token == SYNC_TOKEN:
+            return True
+
+    client_ip = get_client_ip()
+    # Always allow local loopback requests
+    if client_ip in ("127.0.0.1", "::1", "localhost"):
+        return True
+
+    if MASTER_IP:
+        allowed_ips = [ip.strip() for ip in MASTER_IP.split(",") if ip.strip()]
+        if "0.0.0.0" in allowed_ips or "*" in allowed_ips:
+            return True
+        return client_ip in allowed_ips
+
+    return False
 
 def log_security_event(query, client_ip):
     """Logs prompt injection or suspicious security attempts to data/security_logs.json."""
@@ -201,20 +223,20 @@ def serve_posts(path):
     return send_from_directory(POSTS_DIR, path)
 
 
+@app.route('/api/auth/status', methods=['GET'])
+def auth_status():
+    """Endpoint to check permissions for UI features (e.g. sync button visibility)."""
+    return jsonify({
+        "can_sync": is_sync_authorized(),
+        "client_ip": get_client_ip()
+    })
+
 @app.route('/api/sync', methods=['POST'])
 def sync_db():
     """API endpoint to trigger asynchronous manual re-indexing and data extraction."""
     global sync_status
-    if SYNC_TOKEN:
-        auth_header = request.headers.get("Authorization", "")
-        token_header = request.headers.get("X-Sync-Token", "")
-        provided_token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else token_header
-        if provided_token != SYNC_TOKEN:
-            return jsonify({"status": "error", "message": "Unauthorized"}), 401
-    else:
-        client_ip = get_client_ip()
-        if client_ip not in ("127.0.0.1", "::1", "localhost"):
-            return jsonify({"status": "error", "message": "Forbidden: Sync requires local request or LOCAL_MIND_SYNC_TOKEN"}), 403
+    if not is_sync_authorized():
+        return jsonify({"status": "error", "message": "Forbidden: Sync access denied for this IP address."}), 403
 
     try:
         with sync_lock:

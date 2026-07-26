@@ -345,7 +345,7 @@ async function init() {
             headerIds: false,
             mangle: false
         });
-        const response = await fetch('/data/viz-data.json');
+        const response = await fetch('/data/viz-data.json?v=' + Date.now());
         const data = await response.json();
         globalNodes = data.nodes;
         globalEdges = data.edges;
@@ -1102,55 +1102,68 @@ async function init() {
         }
 
         const syncBtn = document.getElementById('sync-btn');
-        syncBtn.addEventListener('click', async () => {
-            syncBtn.disabled = true;
-            syncBtn.classList.add('loading');
-            syncBtn.innerHTML = 'Syncing...';
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async () => {
+                syncBtn.disabled = true;
+                syncBtn.classList.add('loading');
+                syncBtn.innerHTML = 'Syncing...';
 
-            const resetSyncButton = () => {
-                syncBtn.disabled = false;
-                syncBtn.classList.remove('loading');
-                syncBtn.innerHTML = 'Sync';
-            };
+                const resetSyncButton = () => {
+                    syncBtn.disabled = false;
+                    syncBtn.classList.remove('loading');
+                    syncBtn.innerHTML = 'Sync';
+                };
 
-            try {
-                const res = await fetch('/api/sync', { method: 'POST' });
-                const result = await res.json();
+                try {
+                    const res = await fetch('/api/sync', { method: 'POST' });
+                    const result = await res.json();
 
-                if (result.status === 'processing') {
-                    const pollInterval = setInterval(async () => {
-                        try {
-                            const statusRes = await fetch('/api/sync/status');
-                            const statusData = await statusRes.json();
-                            if (statusData.status === 'idle') {
+                    if (result.status === 'processing') {
+                        const pollInterval = setInterval(async () => {
+                            try {
+                                const statusRes = await fetch('/api/sync/status');
+                                const statusData = await statusRes.json();
+                                if (statusData.status === 'idle') {
+                                    clearInterval(pollInterval);
+                                    location.reload();
+                                } else if (statusData.status === 'error' || statusData.status.startsWith('error')) {
+                                    clearInterval(pollInterval);
+                                    console.error('Sync monitoring status error:', statusData.status);
+                                    alert('동기화 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+                                    resetSyncButton();
+                                }
+                            } catch (pollErr) {
+                                console.error('Polling error:', pollErr);
                                 clearInterval(pollInterval);
-                                location.reload();
-                            } else if (statusData.status === 'error' || statusData.status.startsWith('error')) {
-                                clearInterval(pollInterval);
-                                console.error('Sync monitoring status error:', statusData.status);
-                                alert('동기화 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+                                alert('동기화 상태 확인 중 오류가 발생했습니다.');
                                 resetSyncButton();
                             }
-                        } catch (pollErr) {
-                            console.error('Polling error:', pollErr);
-                            clearInterval(pollInterval);
-                            alert('동기화 상태 확인 중 오류가 발생했습니다.');
-                            resetSyncButton();
-                        }
-                    }, 2000);
-                } else if (result.status === 'success') {
-                    location.reload();
-                } else {
-                    console.error('Sync request failed:', result.message);
-                    alert('동기화를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+                        }, 2000);
+                    } else if (result.status === 'success') {
+                        location.reload();
+                    } else {
+                        console.error('Sync request failed:', result.message);
+                        alert('동기화를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+                        resetSyncButton();
+                    }
+                } catch (err) {
+                    console.error('Sync Error:', err);
+                    alert('동기화 과정에서 오류가 발생했습니다.');
                     resetSyncButton();
                 }
-            } catch (err) {
-                console.error('Sync Error:', err);
-                alert('동기화 과정에서 오류가 발생했습니다.');
-                resetSyncButton();
-            }
-        });
+            });
+
+            fetch('/api/auth/status')
+                .then(res => res.ok ? res.json() : null)
+                .then(authData => {
+                    if (authData && authData.can_sync) {
+                        syncBtn.style.display = 'inline-block';
+                    } else if (authData && !authData.can_sync) {
+                        syncBtn.style.display = 'none';
+                    }
+                })
+                .catch(err => console.warn('Failed to check sync auth status:', err));
+        }
 
         // --- Mobile Interactions ---
         const mobileMenuBtn = document.getElementById('mobile-menu-btn');

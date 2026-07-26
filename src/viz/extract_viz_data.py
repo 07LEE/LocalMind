@@ -278,8 +278,10 @@ def extract_visualization_data():
     }
 
     print(f"Saving visualization data to {OUTPUT_PATH}...")
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+    tmp_path = OUTPUT_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, OUTPUT_PATH)
     
     print(f"Success! (Nodes: {len(nodes)}, Semantic Edges: {len(edges)})")
 
