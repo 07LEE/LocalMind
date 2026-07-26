@@ -5,6 +5,9 @@
 #include <unordered_map>
 #include <cmath>
 #include <algorithm>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -24,10 +27,23 @@ public:
         tf_.resize(num_docs);
         doc_lengths_.resize(num_docs);
 
-        std::unordered_map<std::string, size_t> doc_freqs;
         double total_length = 0.0;
 
-        for (size_t i = 0; i < num_docs; ++i) {
+#ifdef _OPENMP
+        int max_threads = omp_get_max_threads();
+#else
+        int max_threads = 1;
+#endif
+
+        std::vector<std::unordered_map<std::string, size_t>> thread_doc_freqs(max_threads);
+
+#pragma omp parallel for reduction(+:total_length) schedule(static)
+        for (int i = 0; i < static_cast<int>(num_docs); ++i) {
+#ifdef _OPENMP
+            int tid = omp_get_thread_num();
+#else
+            int tid = 0;
+#endif
             const auto& tokens = doc_tokens[i];
             doc_lengths_[i] = tokens.size();
             total_length += tokens.size();
@@ -37,8 +53,16 @@ public:
                 doc_tf[token] += 1.0;
             }
 
+            auto& local_df = thread_doc_freqs[tid];
             for (const auto& pair : doc_tf) {
-                doc_freqs[pair.first]++;
+                local_df[pair.first]++;
+            }
+        }
+
+        std::unordered_map<std::string, size_t> doc_freqs;
+        for (int t = 0; t < max_threads; ++t) {
+            for (const auto& pair : thread_doc_freqs[t]) {
+                doc_freqs[pair.first] += pair.second;
             }
         }
 
@@ -55,31 +79,57 @@ public:
         size_t num_docs = tf_.size();
         if (num_docs == 0 || query_tokens.empty()) return {};
 
-        std::vector<std::pair<double, int>> scores;
-        scores.reserve(num_docs);
+#ifdef _OPENMP
+        int max_threads = omp_get_max_threads();
+#else
+        int max_threads = 1;
+#endif
 
-        for (size_t i = 0; i < num_docs; ++i) {
-            double score = 0.0;
-            const auto& doc_tf = tf_[i];
-            double doc_len = doc_lengths_[i];
+        std::vector<std::vector<std::pair<double, int>>> thread_scores(max_threads);
 
-            for (const auto& term : query_tokens) {
-                auto idf_it = idf_.find(term);
-                if (idf_it == idf_.end()) continue;
+#pragma omp parallel
+        {
+#ifdef _OPENMP
+            int tid = omp_get_thread_num();
+#else
+            int tid = 0;
+#endif
+            auto& local_scores = thread_scores[tid];
 
-                auto tf_it = doc_tf.find(term);
-                double tf_val = (tf_it != doc_tf.end()) ? tf_it->second : 0.0;
+#pragma omp for schedule(static)
+            for (int i = 0; i < static_cast<int>(num_docs); ++i) {
+                double score = 0.0;
+                const auto& doc_tf = tf_[i];
+                double doc_len = doc_lengths_[i];
 
-                if (tf_val > 0.0) {
-                    double idf_val = idf_it->second;
-                    double numerator = tf_val * (k1_ + 1.0);
-                    double denominator = tf_val + k1_ * (1.0 - b_ + b_ * doc_len / avgdl_);
-                    score += idf_val * (numerator / denominator);
+                for (const auto& term : query_tokens) {
+                    auto idf_it = idf_.find(term);
+                    if (idf_it == idf_.end()) continue;
+
+                    auto tf_it = doc_tf.find(term);
+                    double tf_val = (tf_it != doc_tf.end()) ? tf_it->second : 0.0;
+
+                    if (tf_val > 0.0) {
+                        double idf_val = idf_it->second;
+                        double numerator = tf_val * (k1_ + 1.0);
+                        double denominator = tf_val + k1_ * (1.0 - b_ + b_ * doc_len / avgdl_);
+                        score += idf_val * (numerator / denominator);
+                    }
+                }
+                if (score > 0.0) {
+                    local_scores.push_back({score, i});
                 }
             }
-            if (score > 0.0) {
-                scores.push_back({score, static_cast<int>(i)});
-            }
+        }
+
+        std::vector<std::pair<double, int>> scores;
+        size_t total_matches = 0;
+        for (int t = 0; t < max_threads; ++t) {
+            total_matches += thread_scores[t].size();
+        }
+        scores.reserve(total_matches);
+        for (int t = 0; t < max_threads; ++t) {
+            scores.insert(scores.end(), thread_scores[t].begin(), thread_scores[t].end());
         }
 
         std::sort(scores.begin(), scores.end(), [](const auto& a, const auto& b) {

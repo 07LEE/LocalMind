@@ -13,9 +13,10 @@ class BuildExt(build_ext):
         for ext in self.extensions:
             ext.include_dirs.append(pybind11.get_include())
             if sys.platform == "win32":
-                ext.extra_compile_args = ["/O2", "/std:c++17"]
+                ext.extra_compile_args = ["/O2", "/std:c++17", "/openmp"]
             else:
-                ext.extra_compile_args = ["-O3", "-std=c++17", "-fPIC"]
+                ext.extra_compile_args = ["-O3", "-std=c++17", "-fPIC", "-fopenmp"]
+                ext.extra_link_args = ["-fopenmp"]
         super().build_extensions()
 
 setup(

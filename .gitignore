@@ -20,6 +20,7 @@ __pycache__/
 posts
 data/
 models/
+docs/
 
 # C++ build artifacts
 *.so
