@@ -283,6 +283,7 @@ async function init() {
     try {
         // Theme initialization
         const themeToggle = document.getElementById('theme-toggle');
+        const themeToggleDesktop = document.getElementById('theme-toggle-desktop');
         const themeToggleMobile = document.getElementById('theme-toggle-mobile');
         let currentTheme = localStorage.getItem('theme') || 'dark';
 
@@ -310,6 +311,7 @@ async function init() {
         };
 
         if (themeToggle) themeToggle.addEventListener('click', handleThemeToggle);
+        if (themeToggleDesktop) themeToggleDesktop.addEventListener('click', handleThemeToggle);
         if (themeToggleMobile) themeToggleMobile.addEventListener('click', handleThemeToggle);
 
         // --- TOC Layout Control Setup ---
@@ -632,7 +634,9 @@ async function init() {
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
             margin: { t: 0, r: 0, b: 0, l: 0 },
+            dragmode: 'orbit',
             scene: {
+                dragmode: 'orbit',
                 xaxis: { showgrid: false, zeroline: false, showticklabels: false, title: '' },
                 yaxis: { showgrid: false, zeroline: false, showticklabels: false, title: '' },
                 zaxis: { showgrid: false, zeroline: false, showticklabels: false, title: '' },
@@ -641,7 +645,70 @@ async function init() {
             showlegend: false
         };
 
-        Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false });
+        Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false, scrollZoom: false });
+
+        let isTouchingPlot = false;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let initialPinchDist = 0;
+        let initialCameraEye = { x: 1.8, y: 1.8, z: 1.8 };
+
+        function getTouchDist(e) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            return Math.hypot(dx, dy);
+        }
+
+        const plotContainer = document.getElementById('plot');
+        if (plotContainer) {
+            plotContainer.addEventListener('touchstart', function (e) {
+                const fullLayout = plotContainer._fullLayout;
+                if (fullLayout && fullLayout.scene && fullLayout.scene.camera) {
+                    initialCameraEye = { ...fullLayout.scene.camera.eye };
+                }
+                if (e.touches.length === 1) {
+                    isTouchingPlot = true;
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    isTouchingPlot = true;
+                    initialPinchDist = getTouchDist(e);
+                }
+            }, { passive: true });
+
+            plotContainer.addEventListener('touchmove', function (e) {
+                if (!isTouchingPlot) return;
+                e.preventDefault();
+
+                let { x, y, z } = initialCameraEye;
+                let r = Math.sqrt(x * x + y * y + z * z);
+                let theta = Math.atan2(y, x);
+                let phi = Math.acos(Math.max(-1, Math.min(1, z / r)));
+
+                if (e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - touchStartX;
+                    const dy = e.touches[0].clientY - touchStartY;
+                    theta -= dx * 0.008;
+                    phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi - dy * 0.008));
+                } else if (e.touches.length === 2 && initialPinchDist > 0) {
+                    const currentDist = getTouchDist(e);
+                    const zoomFactor = initialPinchDist / currentDist;
+                    r = Math.max(0.4, Math.min(12.0, r * zoomFactor));
+                }
+
+                let newX = r * Math.sin(phi) * Math.cos(theta);
+                let newY = r * Math.sin(phi) * Math.sin(theta);
+                let newZ = r * Math.cos(phi);
+
+                Plotly.relayout('plot', {
+                    'scene.camera.eye': { x: newX, y: newY, z: newZ }
+                }).catch(() => {});
+            }, { passive: false });
+
+            plotContainer.addEventListener('touchend', function () {
+                isTouchingPlot = false;
+            });
+        }
 
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');

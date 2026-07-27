@@ -445,12 +445,33 @@ body {
     max-width: 860px; /* 본문 폭에 맞추어 레이아웃 안정화 */
 }
 
-/* Welcome Search Engine Layout styling */
 .main-search-section {
     width: 100%;
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 10px;
     margin-bottom: 1.5rem;
+}
+
+.desktop-theme-toggle {
+    display: flex;
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+@media (min-width: 769px) {
+    .sidebar-header .theme-toggle-btn {
+        display: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .desktop-theme-toggle {
+        display: none !important;
+    }
 }
 
 .main-search-box {
@@ -744,6 +765,11 @@ body {
 #plot {
     width: 100%;
     height: 100%;
+    touch-action: none;
+}
+
+#plot canvas, #plot .gl-canvas-context-two {
+    touch-action: none;
 }
 
 /* Overlay controls positioned flat */
@@ -1095,6 +1121,7 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     display: block;
     height: calc(100% - 100px); /* 헤더 영역 제외 높이 고정 */
     overflow-x: hidden; /* 우측 임시 숨김 영역으로 인한 가로 스크롤 방지 */
+    overflow-y: hidden; /* 2중 수직 스크롤바 생성 방지 */
 }
 
 .info-body-content {
@@ -1324,7 +1351,7 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
 
 /* Related Links */
 .related-section {
-    margin-top: 3rem;
+    margin-top: 1.25rem;
     border-top: 1px solid var(--divider);
     padding-top: 1.5rem;
 }
