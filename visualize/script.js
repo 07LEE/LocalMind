@@ -645,7 +645,7 @@ async function init() {
             showlegend: false
         };
 
-        Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false, scrollZoom: false });
+        Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false, scrollZoom: true });
 
         let isTouchingPlot = false;
         let touchStartX = 0;
