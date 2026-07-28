@@ -303,7 +303,7 @@ def index_markdown_files(posts_dir, db_path, model_name=None):
         
         # We use a wrapper to pass additional fixed arguments to parse_markdown
         # parse_markdown(filepath, rel_path="")
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
             # Map returns results in the order of the inputs
             future_to_file = {
                 executor.submit(parse_markdown, current_files[rel_path], rel_path): rel_path 

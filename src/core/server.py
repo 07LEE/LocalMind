@@ -163,6 +163,7 @@ def log_unknown_query_if_needed(query, response_text, client_ip="127.0.0.1"):
 
 def _run_sync_background():
     global sync_status
+    success = False
     try:
         print("\nLOGE: [Server] Background sync started.")
         # 1. Run Indexer
@@ -191,13 +192,13 @@ def _run_sync_background():
         print("LOGE: [Server] Reloading database in background...")
         db.load(DB_DEFAULT_PATH)
         
-        with sync_lock:
-            sync_status = "idle"
+        success = True
         print("LOGE: [Server] Background sync completed successfully.")
     except Exception as e:
         print(f"LOGE: [Server] Background sync error: {e}")
+    finally:
         with sync_lock:
-            sync_status = "error"
+            sync_status = "idle" if success else "error"
 
 @app.after_request
 def add_header(response):
