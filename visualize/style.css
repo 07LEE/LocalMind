@@ -1255,6 +1255,28 @@ input:checked + .slider:before { transform: translateX(12px); background-color: 
     font-weight: 600;
 }
 
+/* Hyperlink Styling */
+.info-content a,
+.ai-answer-body a,
+a {
+    color: #58a6ff;
+    text-decoration: none;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+body.light-mode .info-content a,
+body.light-mode .ai-answer-body a,
+body.light-mode a {
+    color: #0969da;
+}
+
+.info-content a:hover,
+.ai-answer-body a:hover,
+a:hover {
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
 .info-content {
     font-size: 0.95rem;
     line-height: 1.7;

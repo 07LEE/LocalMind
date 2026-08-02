@@ -13,6 +13,10 @@ let hoveredIndex = null;
 let currentSizeScale = 1.2;
 
 function getNodeSize(node) {
+    if (node.is_keyword) {
+        const base = node.size_weight !== undefined ? (6 + node.size_weight * 8) : (node.size || 8);
+        return Math.min(base, 16) * currentSizeScale;
+    }
     if (node.size_weight !== undefined) {
         const base = 8 + node.size_weight * 14;
         return base * currentSizeScale;
@@ -84,7 +88,14 @@ async function applyGraphVisualState() {
             });
 
             baseOpacities = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? getNodeSize(n) * 1.5 : 3 * currentSizeScale);
+            baseSizes = globalNodes.map((n, i) => {
+                if (i === activeFocusIndex || connectedIndices.has(i)) {
+                    const scale = n.is_keyword ? 1.15 : 1.2;
+                    const targetSize = getNodeSize(n) * scale;
+                    return n.is_keyword ? Math.min(targetSize, 20 * currentSizeScale) : targetSize;
+                }
+                return 3 * currentSizeScale;
+            });
         } else if (activeSubHighlight !== null) {
             const [cat, sub] = activeSubHighlight.split(' :: ');
             baseOpacities = globalNodes.map(n => {
@@ -96,7 +107,14 @@ async function applyGraphVisualState() {
             });
         } else if (activeSearchIndices !== null) {
             baseOpacities = globalNodes.map((n, i) => activeSearchIndices.has(i) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => activeSearchIndices.has(i) ? getNodeSize(n) * 1.5 : 3 * currentSizeScale);
+            baseSizes = globalNodes.map((n, i) => {
+                if (activeSearchIndices.has(i)) {
+                    const scale = n.is_keyword ? 1.15 : 1.2;
+                    const targetSize = getNodeSize(n) * scale;
+                    return n.is_keyword ? Math.min(targetSize, 20 * currentSizeScale) : targetSize;
+                }
+                return 3 * currentSizeScale;
+            });
         } else {
             baseOpacities = globalNodes.map(() => 0.9);
             baseSizes = globalNodes.map(n => getNodeSize(n));
