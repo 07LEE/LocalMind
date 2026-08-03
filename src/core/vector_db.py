@@ -17,6 +17,13 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 from .engines import SparseIndex, DenseIndex
 
+try:
+    from .engines.markdown_extension import clean_chunks_parallel, clean_chunk as cpp_clean_chunk
+    HAS_MARKDOWN_CPP = True
+except ImportError:
+    HAS_MARKDOWN_CPP = False
+
+
 class SimpleVectorDB:
     def __init__(self, model_name=None, rerank_model_name=None):
         self.model_name = model_name or EMBEDDING_MODEL
@@ -64,10 +71,14 @@ class SimpleVectorDB:
         print(f"LOGE: [VectorDB] Processing {len(texts)} texts...")
         
         # 1. Preprocess texts to remove markdown alert tags for embedding calculation
-        cleaned_texts = [
-            re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', t, flags=re.IGNORECASE)
-            for t in texts
-        ]
+        if HAS_MARKDOWN_CPP:
+            cleaned_texts = clean_chunks_parallel(texts)
+        else:
+            cleaned_texts = [
+                re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', t, flags=re.IGNORECASE)
+                for t in texts
+            ]
+
 
         # 2. Update Dense (Vector) Engine with cleaned texts
         new_vectors = self.dense_engine.embed(cleaned_texts, batch_size=batch_size)

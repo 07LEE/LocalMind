@@ -8,6 +8,13 @@ import yaml
 from core.vector_db import SimpleVectorDB
 from core.config import MAX_CHUNK_SIZE, CHUNKING_OVERLAP
 
+try:
+    from core.engines.markdown_extension import clean_chunks_parallel, clean_chunk as cpp_clean_chunk
+    HAS_MARKDOWN_CPP = True
+except ImportError:
+    HAS_MARKDOWN_CPP = False
+
+
 
 def compute_file_hash(filepath):
     """Computes the SHA-256 hash of a file's content for change detection.
@@ -176,23 +183,23 @@ def parse_markdown(filepath, rel_path=""):
     search_chunks = []
     final_metadatas = []
     
-    for chunk in raw_chunks:
-        # Create a search-optimized version by stripping code blocks and markdown visual elements
-        clean_chunk = re.sub(r'```.*?```', '', chunk, flags=re.DOTALL)
-        # Remove markdown images entirely (e.g. ![alt](image.png))
-        clean_chunk = re.sub(r'!\[.*?\]\(.*?\)', '', clean_chunk)
-        # Simplify markdown links to their text contents only (e.g. [text](url) -> text)
-        clean_chunk = re.sub(r'\[(.*?)\]\([^\)]+\)', r'\1', clean_chunk)
-        clean_chunk = clean_chunk.strip()
-        
-        # If the chunk becomes too empty after stripping code, 
-        # we still keep it but use the original chunk as fallback for search context 
-        # or just use a minimal version to avoid zero-length errors.
+    if HAS_MARKDOWN_CPP:
+        cleaned_chunks_raw = clean_chunks_parallel(raw_chunks)
+    else:
+        cleaned_chunks_raw = []
+        for chunk in raw_chunks:
+            c = re.sub(r'```.*?```', '', chunk, flags=re.DOTALL)
+            c = re.sub(r'!\[.*?\]\(.*?\)', '', c)
+            c = re.sub(r'\[(.*?)\]\([^\)]+\)', r'\1', c)
+            c = re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', c, flags=re.IGNORECASE)
+            cleaned_chunks_raw.append(c.strip())
+
+    for chunk, clean_chunk in zip(raw_chunks, cleaned_chunks_raw):
         if len(clean_chunk) < 10:
-            # Fallback: Just use the headers if any, or a small snippet
             clean_chunk = chunk[:50] 
 
         search_chunks.append(clean_chunk)
+
         
         # Store metadata
         meta = {
