@@ -10,6 +10,20 @@ let orbitAngle = 0;
 let activeSubHighlight = null;
 let activeSearchIndices = null;
 let hoveredIndex = null;
+let currentSizeScale = 1.2;
+
+function getNodeSize(node) {
+    if (node.is_keyword) {
+        const base = node.size_weight !== undefined ? (6 + node.size_weight * 8) : (node.size || 8);
+        return Math.min(base, 16) * currentSizeScale;
+    }
+    if (node.size_weight !== undefined) {
+        const base = 8 + node.size_weight * 14;
+        return base * currentSizeScale;
+    }
+    const s = node.size || 10;
+    return s * currentSizeScale;
+}
 
 function getNodeTime(node) {
     if (node.metadata && node.metadata.date) {
@@ -74,7 +88,14 @@ async function applyGraphVisualState() {
             });
 
             baseOpacities = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => (i === activeFocusIndex || connectedIndices.has(i)) ? n.size * 1.5 : 2);
+            baseSizes = globalNodes.map((n, i) => {
+                if (i === activeFocusIndex || connectedIndices.has(i)) {
+                    const scale = n.is_keyword ? 1.15 : 1.2;
+                    const targetSize = getNodeSize(n) * scale;
+                    return n.is_keyword ? Math.min(targetSize, 20 * currentSizeScale) : targetSize;
+                }
+                return 3 * currentSizeScale;
+            });
         } else if (activeSubHighlight !== null) {
             const [cat, sub] = activeSubHighlight.split(' :: ');
             baseOpacities = globalNodes.map(n => {
@@ -82,14 +103,21 @@ async function applyGraphVisualState() {
             });
             baseSizes = globalNodes.map(n => {
                 const isMatch = n.category === cat && (n.subcategory === sub || n.subcategory.startsWith(sub + ' > '));
-                return isMatch ? n.size : 1.5;
+                return isMatch ? getNodeSize(n) : 2.5 * currentSizeScale;
             });
         } else if (activeSearchIndices !== null) {
             baseOpacities = globalNodes.map((n, i) => activeSearchIndices.has(i) ? 1.0 : 0.05);
-            baseSizes = globalNodes.map((n, i) => activeSearchIndices.has(i) ? n.size * 1.5 : 2);
+            baseSizes = globalNodes.map((n, i) => {
+                if (activeSearchIndices.has(i)) {
+                    const scale = n.is_keyword ? 1.15 : 1.2;
+                    const targetSize = getNodeSize(n) * scale;
+                    return n.is_keyword ? Math.min(targetSize, 20 * currentSizeScale) : targetSize;
+                }
+                return 3 * currentSizeScale;
+            });
         } else {
             baseOpacities = globalNodes.map(() => 0.9);
-            baseSizes = globalNodes.map(n => n.size);
+            baseSizes = globalNodes.map(n => getNodeSize(n));
         }
 
         const edgeX = [], edgeY = [], edgeZ = [];
@@ -273,6 +301,7 @@ async function init() {
     try {
         // Theme initialization
         const themeToggle = document.getElementById('theme-toggle');
+        const themeToggleDesktop = document.getElementById('theme-toggle-desktop');
         const themeToggleMobile = document.getElementById('theme-toggle-mobile');
         let currentTheme = localStorage.getItem('theme') || 'dark';
 
@@ -300,6 +329,7 @@ async function init() {
         };
 
         if (themeToggle) themeToggle.addEventListener('click', handleThemeToggle);
+        if (themeToggleDesktop) themeToggleDesktop.addEventListener('click', handleThemeToggle);
         if (themeToggleMobile) themeToggleMobile.addEventListener('click', handleThemeToggle);
 
         // --- TOC Layout Control Setup ---
@@ -335,7 +365,7 @@ async function init() {
             headerIds: false,
             mangle: false
         });
-        const response = await fetch('/data/viz-data.json');
+        const response = await fetch('/data/viz-data.json?v=' + Date.now());
         const data = await response.json();
         globalNodes = data.nodes;
         globalEdges = data.edges;
@@ -583,7 +613,7 @@ async function init() {
             mode: 'markers',
             type: 'scatter3d',
             marker: {
-                size: globalNodes.map(n => n.size),
+                size: globalNodes.map(n => getNodeSize(n)),
                 color: globalNodes.map(n => n.color),
                 opacity: 0.9,
                 line: { color: nodeLineColor, width: 0.5 }
@@ -622,7 +652,9 @@ async function init() {
         const layout = {
             paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
             margin: { t: 0, r: 0, b: 0, l: 0 },
+            dragmode: 'orbit',
             scene: {
+                dragmode: 'orbit',
                 xaxis: { showgrid: false, zeroline: false, showticklabels: false, title: '' },
                 yaxis: { showgrid: false, zeroline: false, showticklabels: false, title: '' },
                 zaxis: { showgrid: false, zeroline: false, showticklabels: false, title: '' },
@@ -631,7 +663,70 @@ async function init() {
             showlegend: false
         };
 
-        Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false });
+        Plotly.newPlot('plot', [edgeTrace, nodeTrace], layout, { responsive: true, displayModeBar: false, scrollZoom: true });
+
+        let isTouchingPlot = false;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let initialPinchDist = 0;
+        let initialCameraEye = { x: 1.8, y: 1.8, z: 1.8 };
+
+        function getTouchDist(e) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            return Math.hypot(dx, dy);
+        }
+
+        const plotContainer = document.getElementById('plot');
+        if (plotContainer) {
+            plotContainer.addEventListener('touchstart', function (e) {
+                const fullLayout = plotContainer._fullLayout;
+                if (fullLayout && fullLayout.scene && fullLayout.scene.camera) {
+                    initialCameraEye = { ...fullLayout.scene.camera.eye };
+                }
+                if (e.touches.length === 1) {
+                    isTouchingPlot = true;
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    isTouchingPlot = true;
+                    initialPinchDist = getTouchDist(e);
+                }
+            }, { passive: true });
+
+            plotContainer.addEventListener('touchmove', function (e) {
+                if (!isTouchingPlot) return;
+                e.preventDefault();
+
+                let { x, y, z } = initialCameraEye;
+                let r = Math.sqrt(x * x + y * y + z * z);
+                let theta = Math.atan2(y, x);
+                let phi = Math.acos(Math.max(-1, Math.min(1, z / r)));
+
+                if (e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - touchStartX;
+                    const dy = e.touches[0].clientY - touchStartY;
+                    theta -= dx * 0.008;
+                    phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi - dy * 0.008));
+                } else if (e.touches.length === 2 && initialPinchDist > 0) {
+                    const currentDist = getTouchDist(e);
+                    const zoomFactor = initialPinchDist / currentDist;
+                    r = Math.max(0.4, Math.min(12.0, r * zoomFactor));
+                }
+
+                let newX = r * Math.sin(phi) * Math.cos(theta);
+                let newY = r * Math.sin(phi) * Math.sin(theta);
+                let newZ = r * Math.cos(phi);
+
+                Plotly.relayout('plot', {
+                    'scene.camera.eye': { x: newX, y: newY, z: newZ }
+                }).catch(() => {});
+            }, { passive: false });
+
+            plotContainer.addEventListener('touchend', function () {
+                isTouchingPlot = false;
+            });
+        }
 
         const searchInput = document.getElementById('main-search-input');
         const searchResults = document.getElementById('main-search-results');
@@ -978,6 +1073,17 @@ async function init() {
             applyGraphVisualState();
         });
 
+        const sizeScaleSlider = document.getElementById('size-scale-slider');
+        const sizeScaleVal = document.getElementById('size-scale-val');
+
+        if (sizeScaleSlider) {
+            sizeScaleSlider.addEventListener('input', function () {
+                currentSizeScale = parseFloat(this.value);
+                if (sizeScaleVal) sizeScaleVal.textContent = currentSizeScale.toFixed(1);
+                updateGraphNodeSizes();
+            });
+        }
+
         const plotDiv = document.getElementById('plot');
 
         // --- Auto-Orbit Logic ---
@@ -1081,55 +1187,68 @@ async function init() {
         }
 
         const syncBtn = document.getElementById('sync-btn');
-        syncBtn.addEventListener('click', async () => {
-            syncBtn.disabled = true;
-            syncBtn.classList.add('loading');
-            syncBtn.innerHTML = 'Syncing...';
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async () => {
+                syncBtn.disabled = true;
+                syncBtn.classList.add('loading');
+                syncBtn.innerHTML = 'Syncing...';
 
-            const resetSyncButton = () => {
-                syncBtn.disabled = false;
-                syncBtn.classList.remove('loading');
-                syncBtn.innerHTML = 'Sync';
-            };
+                const resetSyncButton = () => {
+                    syncBtn.disabled = false;
+                    syncBtn.classList.remove('loading');
+                    syncBtn.innerHTML = 'Sync';
+                };
 
-            try {
-                const res = await fetch('/api/sync', { method: 'POST' });
-                const result = await res.json();
+                try {
+                    const res = await fetch('/api/sync', { method: 'POST' });
+                    const result = await res.json();
 
-                if (result.status === 'processing') {
-                    const pollInterval = setInterval(async () => {
-                        try {
-                            const statusRes = await fetch('/api/sync/status');
-                            const statusData = await statusRes.json();
-                            if (statusData.status === 'idle') {
+                    if (result.status === 'processing') {
+                        const pollInterval = setInterval(async () => {
+                            try {
+                                const statusRes = await fetch('/api/sync/status');
+                                const statusData = await statusRes.json();
+                                if (statusData.status === 'idle') {
+                                    clearInterval(pollInterval);
+                                    location.reload();
+                                } else if (statusData.status === 'error' || statusData.status.startsWith('error')) {
+                                    clearInterval(pollInterval);
+                                    console.error('Sync monitoring status error:', statusData.status);
+                                    alert('동기화 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+                                    resetSyncButton();
+                                }
+                            } catch (pollErr) {
+                                console.error('Polling error:', pollErr);
                                 clearInterval(pollInterval);
-                                location.reload();
-                            } else if (statusData.status === 'error' || statusData.status.startsWith('error')) {
-                                clearInterval(pollInterval);
-                                console.error('Sync monitoring status error:', statusData.status);
-                                alert('동기화 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+                                alert('동기화 상태 확인 중 오류가 발생했습니다.');
                                 resetSyncButton();
                             }
-                        } catch (pollErr) {
-                            console.error('Polling error:', pollErr);
-                            clearInterval(pollInterval);
-                            alert('동기화 상태 확인 중 오류가 발생했습니다.');
-                            resetSyncButton();
-                        }
-                    }, 2000);
-                } else if (result.status === 'success') {
-                    location.reload();
-                } else {
-                    console.error('Sync request failed:', result.message);
-                    alert('동기화를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+                        }, 2000);
+                    } else if (result.status === 'success') {
+                        location.reload();
+                    } else {
+                        console.error('Sync request failed:', result.message);
+                        alert('동기화를 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+                        resetSyncButton();
+                    }
+                } catch (err) {
+                    console.error('Sync Error:', err);
+                    alert('동기화 과정에서 오류가 발생했습니다.');
                     resetSyncButton();
                 }
-            } catch (err) {
-                console.error('Sync Error:', err);
-                alert('동기화 과정에서 오류가 발생했습니다.');
-                resetSyncButton();
-            }
-        });
+            });
+
+            fetch('/api/auth/status')
+                .then(res => res.ok ? res.json() : null)
+                .then(authData => {
+                    if (authData && authData.can_sync) {
+                        syncBtn.style.display = 'inline-block';
+                    } else if (authData && !authData.can_sync) {
+                        syncBtn.style.display = 'none';
+                    }
+                })
+                .catch(err => console.warn('Failed to check sync auth status:', err));
+        }
 
         // --- Mobile Interactions ---
         const mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -1364,8 +1483,8 @@ async function highlightNode(index) {
             throwOnError: false
         });
 
-        // Generate Table of Contents (TOC) with Scroll Spy (Filter only H3 and H4)
-        const headers = infoContentEl.querySelectorAll('h3, h4');
+        // Generate Table of Contents (TOC) with Scroll Spy (Include H2, H3, and H4)
+        const headers = infoContentEl.querySelectorAll('h2, h3, h4');
         const tocList = document.getElementById('toc-list');
         const tocSidebar = document.getElementById('toc-sidebar');
         const tocDropdown = document.getElementById('toc-dropdown');
@@ -1646,6 +1765,10 @@ function resetView() {
     } finally {
         isUpdating = false;
     }
+}
+
+function updateGraphNodeSizes() {
+    applyGraphVisualState();
 }
 
 document.addEventListener('DOMContentLoaded', init);

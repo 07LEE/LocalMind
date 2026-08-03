@@ -14,6 +14,13 @@ try:
 except ImportError:
     HAS_CPP_EXTENSION = False
 
+try:
+    from .markdown_extension import clean_chunk as cpp_clean_chunk
+    HAS_MARKDOWN_CPP = True
+except ImportError:
+    HAS_MARKDOWN_CPP = False
+
+
 class SparseIndex:
     """Handles BM25-based sparse search logic for keyword-based retrieval.
 
@@ -66,7 +73,10 @@ class SparseIndex:
             return []
 
         # Remove markdown alert tags like [!NOTE], [!WARNING], etc.
-        text = re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', text, flags=re.IGNORECASE)
+        if HAS_MARKDOWN_CPP:
+            text = cpp_clean_chunk(text)
+        else:
+            text = re.sub(r'\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\]', '', text, flags=re.IGNORECASE)
 
         # Using Kiwi for high-quality Korean tokenization
         tokens = self.kiwi.tokenize(text.lower())

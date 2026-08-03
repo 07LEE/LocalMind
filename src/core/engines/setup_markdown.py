@@ -20,11 +20,11 @@ class BuildExt(build_ext):
         super().build_extensions()
 
 setup(
-    name="bm25_extension",
+    name="markdown_extension",
     ext_modules=[
         Pybind11Extension(
-            "bm25_extension",
-            sources=[os.path.join(os.path.dirname(__file__), "bm25_kernel.cpp")],
+            "markdown_extension",
+            sources=[os.path.join(os.path.dirname(__file__), "markdown_kernel.cpp")],
         )
     ],
     cmdclass={"build_ext": BuildExt},

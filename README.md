@@ -34,24 +34,20 @@ graph TD
 
 ## Key Features
 
-### Hybrid Search & Local LLM RAG
-
+#### Hybrid Search & Local LLM RAG
 - **Hybrid Search**: Combines semantic search (Dense Vector) and traditional keyword matching (BM25) using the Reciprocal Rank Fusion (RRF) algorithm to ensure superior Korean search accuracy.
 - **Local LLM Response Generation**: Integrates with a local Ollama service (defaulting to `qwen2.5-coder:14b`) to generate context-aware, reliable answers based on the retrieved document segments.
 - **100% Offline Execution**: All inference tasks and data indexing are processed entirely on your local machine, protecting your private files and knowledge bases from external data leaks.
 
 ### Korean NLP Optimization
-
 - **Morphological Analysis**: Built-in integration with the Kiwi morphological analyzer (`kiwipiepy`) for advanced tokenization and Korean particle removal.
 - **Custom Dictionary Support**: Seamlessly links with the external [Personal-Dictionary](file:///home/lee/Documents/code_personal/Personal-Dictionary/README.md) package to prevent technical terms or project-specific jargon (e.g., 3DGS, COLMAP) from being broken down during indexing.
 
 ### Markdown Preprocessing & Chunking
-
 - **Noise Filtering**: Cleans raw Markdown files by stripping code blocks, formatting tags, image syntax, and simplifying links to optimize embedding and search index quality. It also filters out Markdown alert blocks (e.g., `[!NOTE]`, `[!WARNING]`) to avoid semantic distortion.
 - **Folder-based Categories**: Automatically extracts subfolder directory structures and saves them as `categories` metadata, allowing multi-dimensional category-based filtering.
 
 ### 3D Knowledge Visualization
-
 - **3D Interactive Graph**: Visualizes document relationships in an interactive 3D web interface using UMAP dimensionality reduction and Plotly.js.
 - **Real-time Navigation**: Highlights nodes by keywords, adjusts node sizes by character density, and displays a Markdown preview panel when a node is clicked in the browser.
 

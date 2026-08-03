@@ -85,4 +85,7 @@ RAG_RELEVANCE_THRESHOLD = float(get_env_fallback("LOCAL_MIND_RELEVANCE_THRESHOLD
 
 # Sync Authorization Token (optional)
 SYNC_TOKEN = get_env_fallback("LOCAL_MIND_SYNC_TOKEN", "THOUGHT_SEARCH_SYNC_TOKEN", "")
+# Master IP Configuration (optional)
+MASTER_IP = get_env_fallback("LOCAL_MIND_MASTER_IP", "THOUGHT_SEARCH_MASTER_IP", "")
+
 
