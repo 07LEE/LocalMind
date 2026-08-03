@@ -34,7 +34,7 @@ graph TD
 
 ## Key Features
 
-### Hybrid Search & Local LLM RAG
+#### Hybrid Search & Local LLM RAG
 - **Hybrid Search**: Combines semantic search (Dense Vector) and traditional keyword matching (BM25) using the Reciprocal Rank Fusion (RRF) algorithm to ensure superior Korean search accuracy.
 - **Local LLM Response Generation**: Integrates with a local Ollama service (defaulting to `qwen2.5-coder:14b`) to generate context-aware, reliable answers based on the retrieved document segments.
 - **100% Offline Execution**: All inference tasks and data indexing are processed entirely on your local machine, protecting your private files and knowledge bases from external data leaks.
@@ -59,6 +59,8 @@ graph TD
 - **Metadata Database**: `data/localmind-db.json` (Stores text chunks, source paths, and category metadata)
 
 *Note: Existing databases (`thought-search-db.json` and `thought-search-db.vectors.npy`) will be automatically migrated to the `localmind-db` structure on execution.*
+
+*For detailed performance benchmarks and C++ native optimization details, refer to [docs/cpp-acceleration-report.md](file:///home/lee/Documents/code_personal/Thought-Search/docs/cpp-acceleration-report.md).*
 
 ---
 
@@ -110,6 +112,7 @@ Available environment variables are listed below:
 
 1. Download and install [Ollama](https://ollama.com/).
 2. Pull the default language model for coding and general RAG:
+
    ```bash
    ollama pull qwen2.5-coder:14b
    ```

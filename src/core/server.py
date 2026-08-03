@@ -239,6 +239,7 @@ def sync_db():
     if not is_sync_authorized():
         return jsonify({"status": "error", "message": "Forbidden: Sync access denied for this IP address."}), 403
 
+
     try:
         with sync_lock:
             if sync_status == "processing":
